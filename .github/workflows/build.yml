@@ -63,6 +63,9 @@ jobs:
           $failed = $false
           foreach ($core in $cores) {
             $out = "auto-$($core.name).json"
+            # auto-deteksi dialek membaca `core version`, jadi arahkan ke core
+            # yang sedang diuji (bin/ tidak berisi core di CI).
+            $env:PANTUNNEL_CORE = (Resolve-Path $core.exe).Path
             $log = & bin/PanTunnel.exe --dump-config $out --vless $uri --dialect $core.dialect 2>&1
             Write-Host $log
             if ($log -notmatch $core.wants) { Write-Error "dialek salah untuk $($core.name)"; $failed = $true }
