@@ -56,23 +56,28 @@ jobs:
         shell: pwsh
         run: |
           $uri = 'vless://00000000-0000-0000-0000-000000000000@server.example:443?type=ws&security=tls&path=%2Fvless&sni=sni.example&host=host.example#CI'
+          # Zip rilis sing-box menaruh binary di dalam folder berversi.
+          $modernCore = (Get-ChildItem -Recurse -Filter 'sing-box.exe' cores/sb14 | Select-Object -First 1).FullName
           $cores = @(
-            @{ name = 'local-1.11.15'; exe = 'cores/PanTunnel-Core-windows-amd64.exe'; dialect = 'auto'; wants = 'legacy' },
-            @{ name = 'sing-box-1.14.4'; exe = 'cores/sb14/sing-box.exe'; dialect = 'auto'; wants = 'modern' }
+            @{ name = 'local-1.11.15'; exe = (Resolve-Path 'cores/PanTunnel-Core-windows-amd64.exe').Path; wants = 'legacy' },
+            @{ name = 'sing-box-1.14.4'; exe = $modernCore; wants = 'modern' }
           )
           $failed = $false
           foreach ($core in $cores) {
             $out = "auto-$($core.name).json"
             # auto-deteksi dialek membaca `core version`, jadi arahkan ke core
             # yang sedang diuji (bin/ tidak berisi core di CI).
-            $env:PANTUNNEL_CORE = (Resolve-Path $core.exe).Path
-            $log = & bin/PanTunnel.exe --dump-config $out --vless $uri --dialect $core.dialect 2>&1
+            $env:PANTUNNEL_CORE = $core.exe
+            $log = & bin/PanTunnel.exe --dump-config $out --vless $uri --dialect auto 2>&1
             Write-Host $log
             if ($log -notmatch $core.wants) { Write-Error "dialek salah untuk $($core.name)"; $failed = $true }
-            & $core.exe check -c $out 2>&1 | Tee-Object -Variable checkOut | Out-Host
-            if ($LASTEXITCODE -ne 0 -or ($checkOut -join "`n") -match 'FATAL') { Write-Error "config ditolak $($core.name)"; $failed = $true }
+            $check = & $core.exe check -c $out 2>&1
+            $code = $LASTEXITCODE
+            $check | Out-Host
+            if ($code -ne 0 -or ($check -join "`n") -match 'FATAL') { Write-Error "config ditolak $($core.name)"; $failed = $true }
           }
           if ($failed) { exit 1 }
+          exit 0
 
   build:
     name: build ${{ matrix.name }}

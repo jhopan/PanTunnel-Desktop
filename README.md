@@ -101,8 +101,20 @@ Hasil build di mesin ini:
 | Ukuran | 25.552.384 byte |
 | SHA-256 | `59d1b953f40e949137445e334dcbf5003c403aa6eb70808b2b185acd4ad2a079` |
 
+Core siap pakai juga dipublikasikan di release [`core`](https://github.com/jhopan/PanTunnel-Desktop/releases/tag/core):
+
+| File | Platform |
+|---|---|
+| `PanTunnel-Core-windows-amd64.exe` | Windows x64 |
+| `PanTunnel-Core-linux-amd64` | Linux x86-64, statis (semua distro) |
+| `PanTunnel-Core-linux-arm64` | Linux ARM64, statis |
+| `PanTunnel-Core-macos-intel` | macOS Intel |
+| `PanTunnel-Core-macos-apple` | macOS Apple Silicon |
+
+Semua artefak punya hash di `SHA256SUMS.txt` pada release yang sama.
+
 `bin/` ada di `.gitignore`: binary tidak masuk git, tapi bisa dibangun ulang kapan saja dengan script di atas.
-CI juga membangun core untuk windows/linux/macos dan menyertakannya di setiap release.
+CI juga membangun core untuk windows/linux/macos dan menyertakannya di setiap release `v*`.
 
 Aplikasi mencari core di folder yang sama dengan exe, berurutan:
 `PanTunnel-Core-windows-amd64.exe` → `JPS-Tunnel-Core-windows-amd64.exe` → `sing-box.exe`,
