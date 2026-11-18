@@ -32,21 +32,32 @@ jobs:
           cache-dependency-path: go.sum
       - name: Build CLI
         run: go build -o bin/PanTunnel.exe .
-      - name: Download cores
+      - name: Download modern core
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           New-Item -ItemType Directory -Force -Path cores | Out-Null
-          gh release download core-v1.0.2 -R jhopan/JPS-Tunnel -p 'JPS-Tunnel-Core-windows-amd64.exe' -D cores --clobber
           gh release download v1.14.4 -R SagerNet/sing-box -p 'sing-box-1.14.4-windows-amd64.zip' -D cores --clobber
           Expand-Archive cores/sing-box-1.14.4-windows-amd64.zip -DestinationPath cores/sb14
+      - name: Build legacy core (1.11.15) from source
+        shell: bash
+        env:
+          SINGBOX_VERSION: '1.11.15'
+          TAGS: 'with_gvisor,with_clash_api'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "v$SINGBOX_VERSION" https://github.com/SagerNet/sing-box.git sing-box
+          cd sing-box
+          CGO_ENABLED=0 go build -trimpath -tags "$TAGS" \
+            -ldflags "-s -w -X github.com/sagernet/sing-box/constant.Version=v$SINGBOX_VERSION" \
+            -o ../cores/PanTunnel-Core-windows-amd64.exe ./cmd/sing-box
       - name: Dump configs and validate
         shell: pwsh
         run: |
           $uri = 'vless://00000000-0000-0000-0000-000000000000@server.example:443?type=ws&security=tls&path=%2Fvless&sni=sni.example&host=host.example#CI'
           $cores = @(
-            @{ name = 'jps-1.11.15'; exe = 'cores/JPS-Tunnel-Core-windows-amd64.exe'; dialect = 'legacy'; wants = 'legacy' },
+            @{ name = 'local-1.11.15'; exe = 'cores/PanTunnel-Core-windows-amd64.exe'; dialect = 'auto'; wants = 'legacy' },
             @{ name = 'sing-box-1.14.4'; exe = 'cores/sb14/sing-box.exe'; dialect = 'auto'; wants = 'modern' }
           )
           $failed = $false
@@ -68,9 +79,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: windows-amd64, runner: windows-latest, output: PanTunnel-Desktop-windows-amd64.exe, ldflags: '-s -w -H windowsgui' }
-          - { name: linux-amd64, runner: ubuntu-latest, output: PanTunnel-Desktop-linux-amd64, ldflags: '-s -w' }
-          - { name: macos-apple, runner: macos-latest, output: PanTunnel-Desktop-macos-apple, ldflags: '-s -w' }
+          - { name: windows-amd64, runner: windows-latest, goos: windows, goarch: amd64, output: PanTunnel-Desktop-windows-amd64.exe, ldflags: '-s -w -H windowsgui' }
+          - { name: linux-amd64, runner: ubuntu-latest, goos: linux, goarch: amd64, output: PanTunnel-Desktop-linux-amd64, ldflags: '-s -w' }
+          - { name: macos-intel, runner: macos-latest, goos: darwin, goarch: amd64, output: PanTunnel-Desktop-macos-intel, ldflags: '-s -w' }
+          - { name: macos-apple, runner: macos-latest, goos: darwin, goarch: arm64, output: PanTunnel-Desktop-macos-apple, ldflags: '-s -w' }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -86,6 +98,10 @@ jobs:
             libvulkan-dev
       - name: Build
         shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
         run: go build -ldflags="${{ matrix.ldflags }}" -o "${{ matrix.output }}" .
       - uses: actions/upload-artifact@v4
         with:
@@ -102,6 +118,8 @@ jobs:
         include:
           - { name: windows-amd64, runner: windows-latest, goos: windows, goarch: amd64, output: PanTunnel-Core-windows-amd64.exe }
           - { name: linux-amd64, runner: ubuntu-latest, goos: linux, goarch: amd64, output: PanTunnel-Core-linux-amd64 }
+          - { name: linux-arm64, runner: ubuntu-latest, goos: linux, goarch: arm64, output: PanTunnel-Core-linux-arm64 }
+          - { name: macos-intel, runner: macos-latest, goos: darwin, goarch: amd64, output: PanTunnel-Core-macos-intel }
           - { name: macos-apple, runner: macos-latest, goos: darwin, goarch: arm64, output: PanTunnel-Core-macos-apple }
     steps:
       - uses: actions/setup-go@v5
@@ -163,8 +181,11 @@ jobs:
           files: |
             dist/PanTunnel-Desktop-windows-amd64.exe
             dist/PanTunnel-Desktop-linux-amd64
+            dist/PanTunnel-Desktop-macos-intel
             dist/PanTunnel-Desktop-macos-apple
             dist/PanTunnel-Core-windows-amd64.exe
             dist/PanTunnel-Core-linux-amd64
+            dist/PanTunnel-Core-linux-arm64
+            dist/PanTunnel-Core-macos-intel
             dist/PanTunnel-Core-macos-apple
             dist/SHA256SUMS.txt
