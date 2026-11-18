@@ -1,0 +1,9 @@
+bin/
+output/
+*.exe
+*.syso
+*.log
+*.tmp
+.workbuddy-ai/
+# Jangan commit artefak uji
+*.jps
