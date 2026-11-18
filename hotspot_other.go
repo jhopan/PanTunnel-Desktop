@@ -18,7 +18,7 @@ func hotspotEnable(string) (string, error) {
 	return "", fmt.Errorf("hotspot share hanya tersedia di Windows")
 }
 
-func hotspotDisable(string, string) {}
+func hotspotDisable(string) {}
 
 func runICSCommand(string) int {
 	fmt.Fprintln(os.Stderr, "GAGAL: hotspot share hanya tersedia di Windows")
