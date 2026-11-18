@@ -35,6 +35,31 @@ Dialek dipilih otomatis dari `core version`; dipaksa dengan `--dialect legacy|mo
 ditolak 1.14 dan config modern ditolak 1.11 — karenanya deteksi ini penting, dan ketiga kombinasi di
 atas diuji ulang lewat CI (`.github/workflows/build.yml`).
 
+### Core sendiri (bukan binary aplikasi lain)
+
+Core untuk pengujian dibangun dari source SagerNet dengan `scripts/build-core.sh`:
+
+```
+sing-box version v1.11.15
+Environment: go1.26.0 windows/amd64
+Tags: with_gvisor,with_clash_api
+Revision: bc35aca01704497c179da1a03e45ad8e32f1a51b
+CGO: disabled
+```
+
+`bin/PanTunnel-Core-windows-amd64.exe` — 25.552.384 byte,
+SHA-256 `59d1b953f40e949137445e334dcbf5003c403aa6eb70808b2b185acd4ad2a079`.
+
+Aplikasi menemukannya sendiri (tanpa `PANTUNNEL_CORE`) dan memilih dialek `legacy`; config hasil
+`--dump-config` untuk core itu lolos `check` tanpa peringatan:
+
+```
+PanTunnel-Desktop.exe --dump-config auto-local.json --vless "vless://…#Test"
+→ config ditulis ke auto-local.json (dialek: legacy)
+PanTunnel-Core-windows-amd64.exe check -c auto-local.json
+→ (tanpa output; exit 0)
+```
+
 ## 3. Tunnel + DNS — sebagian, tanpa uji hidup penuh
 
 Diuji pada mesin pengembang dengan core sing-box 1.14.4 sebagai klien dan sing-box 1.14.4 sebagai

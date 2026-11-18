@@ -93,17 +93,52 @@ jobs:
           path: ${{ matrix.output }}
           if-no-files-found: error
 
+  core:
+    name: core ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-amd64, runner: windows-latest, goos: windows, goarch: amd64, output: PanTunnel-Core-windows-amd64.exe }
+          - { name: linux-amd64, runner: ubuntu-latest, goos: linux, goarch: amd64, output: PanTunnel-Core-linux-amd64 }
+          - { name: macos-apple, runner: macos-latest, goos: darwin, goarch: arm64, output: PanTunnel-Core-macos-apple }
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - name: Build sing-box core
+        shell: bash
+        env:
+          SINGBOX_VERSION: '1.11.15'
+          TAGS: 'with_gvisor,with_clash_api'
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "v$SINGBOX_VERSION" https://github.com/SagerNet/sing-box.git sing-box
+          cd sing-box
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -trimpath \
+            -tags "$TAGS" \
+            -ldflags "-s -w -X github.com/sagernet/sing-box/constant.Version=v$SINGBOX_VERSION" \
+            -o "../${{ matrix.output }}" ./cmd/sing-box
+          cd ..
+          ls -l "${{ matrix.output }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-${{ matrix.name }}
+          path: ${{ matrix.output }}
+          if-no-files-found: error
+
   release:
     name: release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, core]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: pantunnel-*
+          pattern: '*'
           merge-multiple: true
           path: dist/
       - name: Checksums
@@ -117,12 +152,19 @@ jobs:
 
             Klien VPN desktop berbasis sing-box (TUN gVisor), VLESS WS TLS, tanpa DNS leak, plus Hotspot Share.
 
+            ### Cara pakai
+            1. Unduh `PanTunnel-Desktop-<platform>` dan `PanTunnel-Core-<platform>` yang cocok.
+            2. Taruh keduanya di satu folder (rename core apa adanya — aplikasi mencarinya dengan nama itu).
+            3. Jalankan aplikasi; UAC muncul sendiri karena TUN dan ICS butuh admin.
+
             ### Catatan
-            - Windows: binary sudah meminta UAC sendiri saat dijalankan.
-            - Core sing-box **tidak** disertakan — letakkan `PanTunnel-Core-windows-amd64.exe`
-              (dari release `core-v*` JPS Tunnel) di folder yang sama. Lihat README.
+            - Core sing-box **dibangun dari source** (v1.11.15, tag `with_gvisor,with_clash_api`) — bukan binary pihak lain.
+            - `SHA256SUMS.txt` memuat hash semua artefak.
           files: |
             dist/PanTunnel-Desktop-windows-amd64.exe
             dist/PanTunnel-Desktop-linux-amd64
             dist/PanTunnel-Desktop-macos-apple
+            dist/PanTunnel-Core-windows-amd64.exe
+            dist/PanTunnel-Core-linux-amd64
+            dist/PanTunnel-Core-macos-apple
             dist/SHA256SUMS.txt

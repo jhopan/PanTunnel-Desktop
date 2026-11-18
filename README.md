@@ -68,17 +68,46 @@ Detail: [`docs/HOTSPOT.md`](docs/HOTSPOT.md).
 
 ---
 
-## Kebutuhan core
+## Core: dibangun sendiri dari source
 
-PanTunnel Desktop tidak menanam core di dalam binary. Letakkan **satu** binary core sing-box di folder
-yang sama dengan `PanTunnel-Desktop.exe`:
+PanTunnel Desktop tidak menanam core di dalam binary, dan **tidak memakai binary sing-box dari aplikasi lain**.
+Core dibangun dari source resmi SagerNet (MIT) dengan tag yang dibutuhkan:
 
-| Sumber | File | Catatan |
-|---|---|---|
-| Release JPS Tunnel `core-v*` | `JPS-Tunnel-Core-windows-amd64.exe` | sing-box 1.11.15, `with_gvisor,with_clash_api` — paling terbukti di ekosistem ini |
-| Release resmi sing-box | `sing-box.exe` (rename `PanTunnel-Core-windows-amd64.exe`) | 1.13/1.14 didukung (dialek modern) |
+```bash
+./scripts/build-core.sh                 # host ini → bin/PanTunnel-Core-windows-amd64.exe
+./scripts/build-core.sh 1.11.15 windows amd64
+./scripts/build-core.sh 1.11.15 linux amd64
+```
 
-Tag build core wajib `with_gvisor`.
+Script itu menjalankan, persis:
+
+```bash
+git clone --depth 1 --branch v1.11.15 https://github.com/SagerNet/sing-box.git
+cd sing-box
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
+  -tags "with_gvisor,with_clash_api" \
+  -ldflags "-s -w -X github.com/sagernet/sing-box/constant.Version=v1.11.15" \
+  -o bin/PanTunnel-Core-windows-amd64.exe ./cmd/sing-box
+```
+
+Tag wajib: `with_gvisor` (stack TUN yang dipakai config) dan `with_clash_api`.
+
+Hasil build di mesin ini:
+
+| | |
+|---|---|
+| File | `bin/PanTunnel-Core-windows-amd64.exe` |
+| Versi | sing-box **v1.11.15** (`Tags: with_gvisor,with_clash_api`, revision `bc35aca`) |
+| Ukuran | 25.552.384 byte |
+| SHA-256 | `59d1b953f40e949137445e334dcbf5003c403aa6eb70808b2b185acd4ad2a079` |
+
+`bin/` ada di `.gitignore`: binary tidak masuk git, tapi bisa dibangun ulang kapan saja dengan script di atas.
+CI juga membangun core untuk windows/linux/macos dan menyertakannya di setiap release.
+
+Aplikasi mencari core di folder yang sama dengan exe, berurutan:
+`PanTunnel-Core-windows-amd64.exe` → `JPS-Tunnel-Core-windows-amd64.exe` → `sing-box.exe`,
+dan bisa dipaksa lewat env `PANTUNNEL_CORE`. Dialek config dipilih otomatis dari `core version`, jadi core
+1.13/1.14 resmi juga jalan (dialek modern).
 
 ---
 

@@ -41,7 +41,8 @@ Gio butuh CGO (gcc sudah ada di mesin ini: `C:\TDM-GCC-64\bin\gcc.exe`).
 
 1. `go vet ./...` bersih, `go test ./...` hijau.
 2. `--dump-config` untuk kedua dialek, lalu `sing-box check` dengan core sungguhan:
-   JPS core 1.11.x untuk dialek legacy, sing-box ≥1.12 untuk dialek modern.
+   `bin/PanTunnel-Core-windows-amd64.exe` (bangun dengan `./scripts/build-core.sh`) untuk dialek legacy,
+   sing-box ≥1.12 untuk dialek modern.
 3. Perubahan UI/ICS: uji hidup hanya dengan izin user (lihat aturan di atas), dan catat apa yang
    belum diuji di `docs/VERIFICATION.md`.
 
