@@ -17,13 +17,22 @@ var (
 	procShellExecuteW = shell32.NewProc("ShellExecuteW")
 )
 
+// elevatedNow reports whether this process already has administrator rights.
+func elevatedNow() bool {
+	return windows.GetCurrentProcessToken().IsElevated()
+}
+
 // ensureElevated relaunches the app through the UAC prompt when it is not an
 // administrator: TUN creation and ICS need admin, and a silent failure there
-// would look like a broken VPN.
+// would look like a broken VPN. It reports whether this process should keep
+// running: after a successful relaunch the caller must exit.
 func ensureElevated() bool {
-	if windows.GetCurrentProcessToken().IsElevated() {
+	if elevatedNow() {
 		return true
 	}
+	// Lepas klaim single-instance sebelum relaunch: kalau tidak, proses
+	// elevated akan melihat mutex ini dan keluar tanpa menampilkan window.
+	releaseInstance()
 	exe, err := os.Executable()
 	if err != nil {
 		return false
@@ -53,6 +62,12 @@ func ensureElevated() bool {
 		uintptr(unsafe.Pointer(dir)),
 		1, // SW_SHOWNORMAL
 	)
-	// > 32 means the elevated instance was started.
-	return ret > 32
+	if ret > 32 {
+		// Instance elevated sudah jalan: proses ini harus berhenti, kalau tidak
+		// user melihat dua window (yang satu tanpa hak admin).
+		return false
+	}
+	// UAC ditolak: lanjut tanpa admin. Profil tetap bisa diatur; CONNECT akan
+	// gagal dengan pesan dari core.
+	return true
 }

@@ -135,7 +135,15 @@ func main() {
 	if code, handled := runCLI(os.Args[1:]); handled {
 		os.Exit(code)
 	}
+	// Satu instance: yang kedua tidak boleh membuat TUN kedua. Cukup bawa
+	// window yang sudah jalan ke depan lalu keluar.
+	if anotherInstance() {
+		focusExistingWindow()
+		os.Exit(0)
+	}
 	// UAC prompt for TUN + ICS. On Linux/macOS this is a no-op.
+	// ensureElevated melepas mutex sebelum relaunch supaya instance elevated
+	// bisa mengambilnya.
 	if !ensureElevated() {
 		os.Exit(0)
 	}
@@ -1026,6 +1034,13 @@ func (u *uiState) connected() bool {
 	return u.cmd != nil && u.cmd.Process != nil
 }
 
+// statusSnapshot membaca status dan hasil ping untuk UI maupun mode --connect.
+func (u *uiState) statusSnapshot() (string, string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.status, u.pingMs
+}
+
 func (u *uiState) start() {
 	p := u.getActiveProfile()
 	if p == nil || p.Address == "" || p.UUID == "" {
@@ -1042,7 +1057,15 @@ func (u *uiState) start() {
 		u.status = "GAGAL: " + err.Error()
 		return
 	}
-	cfgBytes, err := buildSingboxConfig(*p, port, coreModern(core))
+	// Alamat server dikunci ke IP sekarang, selagi DNS sistem masih normal.
+	serverAddr, err := resolveServerAddress(p.Address, 6*time.Second)
+	if err != nil {
+		u.status = "GAGAL: hostname server tidak bisa diresolusi — " + err.Error()
+		return
+	}
+	pinned := *p
+	pinned.Address = serverAddr
+	cfgBytes, err := buildSingboxConfig(pinned, port, coreModern(core))
 	if err != nil {
 		u.status = "GAGAL: pembuatan config sing-box gagal."
 		return

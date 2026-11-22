@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sampleURI = "vless://00000000-0000-0000-0000-000000000000@server.example:443?type=ws&security=tls&path=%2Fvless&sni=sni.example&host=host.example#Test"
+
+// serverHostRoute adalah route host untuk p.Address di decodeConfig.
+const serverHostRoute = "203.0.113.10/32"
 
 func decodeConfig(t *testing.T, modern bool) map[string]any {
 	t.Helper()
@@ -14,6 +18,8 @@ func decodeConfig(t *testing.T, modern bool) map[string]any {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// start() mengunci alamat server ke IP sebelum tunnel naik.
+	p.Address = "203.0.113.10"
 	raw, err := buildSingboxConfig(p, 443, modern)
 	if err != nil {
 		t.Fatal(err)
@@ -77,25 +83,28 @@ func TestConfigLeakProtection(t *testing.T) {
 		t.Fatalf("alamat TUN kurang: %v", addrs)
 	}
 	excluded := stringsOf(t, tun["route_exclude_address"])
-	for _, want := range []string{"192.168.0.0/16", "10.0.0.0/8"} {
+	for _, want := range []string{"192.168.0.0/16", "10.0.0.0/8", serverHostRoute} {
 		if !contains(excluded, want) {
-			t.Fatalf("route_exclude_address harus memuat %s (LAN + subnet hotspot): %v", want, excluded)
+			t.Fatalf("route_exclude_address harus memuat %s (LAN + subnet hotspot + server VPN): %v", want, excluded)
 		}
 	}
 
-	// DNS: every resolver except the bootstrap one must sit inside the tunnel.
+	// DNS: tidak boleh ada resolver di luar tunnel, termasuk resolver lokal.
 	dns := dict(t, cfg["dns"])
 	if dns["final"] != "dns-tunnel" {
 		t.Fatalf("resolver final harus lewat tunnel, dapat %v", dns["final"])
 	}
-	for _, raw := range list(t, dns["servers"]) {
+	servers := list(t, dns["servers"])
+	if len(servers) != 2 {
+		t.Fatalf("harus tepat dua resolver (semuanya di tunnel), dapat %d", len(servers))
+	}
+	for _, raw := range servers {
 		server := dict(t, raw)
-		tag := server["tag"]
-		if tag == "dns-local" {
-			continue
-		}
 		if server["detour"] != "proxy" {
-			t.Fatalf("resolver %v tidak lewat tunnel: %#v", tag, server)
+			t.Fatalf("resolver %v tidak lewat tunnel: %#v", server["tag"], server)
+		}
+		if server["address"] == "local" || server["type"] == "local" {
+			t.Fatalf("resolver lokal membuka jalan DNS keluar tunnel: %#v", server)
 		}
 	}
 
@@ -111,7 +120,7 @@ func TestConfigLeakProtection(t *testing.T) {
 			hasHijack = true
 		}
 		if rule["outbound"] == "direct" {
-			if domains := rule["domain"]; domains != nil && contains(stringsOf(t, domains), "server.example") {
+			if cidrs := rule["ip_cidr"]; cidrs != nil && contains(stringsOf(t, cidrs), serverHostRoute) {
 				serverDirect = true
 			}
 		}
@@ -120,7 +129,7 @@ func TestConfigLeakProtection(t *testing.T) {
 		t.Fatal("tanpa aturan hijack-dns, DNS bisa keluar TUN")
 	}
 	if !serverDirect {
-		t.Fatal("hostname server VPN harus direct supaya tidak jadi routing loop")
+		t.Fatal("IP server VPN harus direct supaya tidak jadi routing loop")
 	}
 }
 
@@ -158,8 +167,35 @@ func TestConfigDialects(t *testing.T) {
 		t.Fatal("domain_strategy dihapus di sing-box 1.14")
 	}
 	routeModern := dict(t, modern["route"])
-	if dict(t, routeModern["default_domain_resolver"])["server"] != "dns-local" {
+	if dict(t, routeModern["default_domain_resolver"])["server"] != "dns-tunnel" {
 		t.Fatal("dialek modern butuh route.default_domain_resolver")
+	}
+}
+
+// Alamat server harus jadi route host tunggal, supaya koneksi ke server tidak
+// ikut masuk TUN (dan hostname tidak pernah diresolusi di dalam tunnel).
+func TestHostRoute(t *testing.T) {
+	cases := map[string]string{
+		"203.0.113.10": "203.0.113.10/32",
+		"2001:db8::1":  "2001:db8::1/128",
+		"server.example": "",
+		"":               "",
+	}
+	for addr, want := range cases {
+		if got := hostRoute(addr); got != want {
+			t.Fatalf("hostRoute(%q) = %q, mau %q", addr, got, want)
+		}
+	}
+}
+
+func TestResolveServerAddressKeepsLiteralIP(t *testing.T) {
+	got, err := resolveServerAddress("203.0.113.5", time.Second)
+	if err != nil || got != "203.0.113.5" {
+		t.Fatalf("IP literal harus dipakai apa adanya: %q %v", got, err)
+	}
+	got, err = resolveServerAddress("2001:db8::5", time.Second)
+	if err != nil || got != "2001:db8::5" {
+		t.Fatalf("IPv6 literal harus dipakai apa adanya: %q %v", got, err)
 	}
 }
 

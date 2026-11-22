@@ -12,6 +12,7 @@ remote ke agen ini).
   pada sesi itu.
 - **MUST NOT** mengubah state ICS (`--ics enable`, `--ics disable`) tanpa izin eksplisit: itu
   mengubah sharing internet laptop.
+- **MUST NOT** menjalankan `--connect`: mode itu menaikkan TUN, sama seperti menekan CONNECT.
 - Aman dijalankan kapan saja: `go test ./...`, `go vet ./...`, `--dump-config` + `sing-box check`,
   `--ics query` (read-only).
 - Kalau tunnel pernah dijalankan saat menguji: pastikan core mati, adapter `pantunnel-tun` hilang, dan

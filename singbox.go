@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -10,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TUN identity and addressing.
@@ -151,6 +154,43 @@ func minorModern(minor int, ok bool) bool {
 	return ok && minor >= 12
 }
 
+// hostRoute converts a server address into a single-host route (/32 or /128).
+func hostRoute(addr string) string {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return ""
+	}
+	if ip.To4() != nil {
+		return addr + "/32"
+	}
+	return addr + "/128"
+}
+
+// resolveServerAddress pins the VPN server hostname to an IP *before* the TUN
+// comes up. Once the TUN is up the system resolver points at the tunnel itself,
+// so a hostname here would be a bootstrap deadlock: the tunnel needs the
+// server, the server name needs the tunnel.
+func resolveServerAddress(host string, timeout time.Duration) (string, error) {
+	if net.ParseIP(host) != nil {
+		return host, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil {
+		return "", err
+	}
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+	if len(ips) > 0 {
+		return ips[0].String(), nil
+	}
+	return "", fmt.Errorf("tidak ada alamat IP untuk %s", host)
+}
+
 // buildSingboxConfig renders the sing-box config for one VLESS profile.
 //
 // Anti-leak shape, in order of importance:
@@ -158,35 +198,31 @@ func minorModern(minor int, ok bool) bool {
 //     DNS behaviour from answering over the physical adapter.
 //   - hijack-dns route rule: every DNS packet that enters the TUN is answered
 //     by the tunnel DNS servers, whatever address the client asked.
-//   - the only configured resolvers are inside the tunnel; the local resolver
-//     exists solely to bootstrap the VPN server's own hostname.
-//   - LAN ranges are excluded from the tunnel (see lanRoutes).
+//   - every configured resolver sits inside the tunnel. There is no local
+//     resolver at all: p.Address must already be an IP, resolved *before* the
+//     TUN comes up (see resolveServerAddress). A hostname here would deadlock,
+//     because once the TUN is up the system resolver points at the tunnel.
+//   - LAN ranges and the VPN server itself are excluded from the tunnel routes.
 func buildSingboxConfig(p profile, port int, modern bool) ([]byte, error) {
 	appDir := appDataDir()
-	serverDomain := p.Address
+	serverAddr := p.Address
 
 	dnsServers := []any{}
 	if modern {
 		dnsServers = append(dnsServers,
 			map[string]any{"tag": "dns-tunnel", "type": "udp", "server": "1.1.1.1", "detour": "proxy"},
 			map[string]any{"tag": "dns-backup", "type": "udp", "server": "8.8.8.8", "detour": "proxy"},
-			map[string]any{"tag": "dns-local", "type": "local"},
 		)
 	} else {
 		dnsServers = append(dnsServers,
 			map[string]any{"tag": "dns-tunnel", "address": "1.1.1.1", "strategy": "prefer_ipv4", "detour": "proxy"},
 			map[string]any{"tag": "dns-backup", "address": "8.8.8.8", "strategy": "prefer_ipv4", "detour": "proxy"},
-			map[string]any{"tag": "dns-local", "address": "local"},
 		)
 	}
 
 	dns := map[string]any{
 		"servers": dnsServers,
-		"rules": []any{
-			// The VPN server hostname must resolve before the tunnel exists.
-			map[string]any{"domain": []string{serverDomain}, "server": "dns-local"},
-		},
-		"final": "dns-tunnel",
+		"final":   "dns-tunnel",
 	}
 	if !modern {
 		dns["strategy"] = "prefer_ipv4"
@@ -196,7 +232,7 @@ func buildSingboxConfig(p profile, port int, modern bool) ([]byte, error) {
 	proxyOutbound := map[string]any{
 		"type":        "vless",
 		"tag":         "proxy",
-		"server":      p.Address,
+		"server":      serverAddr,
 		"server_port": port,
 		"uuid":        p.UUID,
 		// No hostname verification: these deployments terminate TLS with a
@@ -212,29 +248,33 @@ func buildSingboxConfig(p profile, port int, modern bool) ([]byte, error) {
 			"headers": map[string]string{"Host": p.Host},
 		},
 	}
-	if modern {
-		// Replaces outbound.domain_strategy (removed in sing-box 1.14) and is
-		// required for every outbound that dials a hostname.
-		proxyOutbound["domain_resolver"] = map[string]any{"server": "dns-local", "strategy": "prefer_ipv4"}
-	} else {
+	if !modern {
 		proxyOutbound["domain_strategy"] = "prefer_ipv4"
 	}
 
+	// Anti-loop: the VPN server must be reachable without the tunnel, both as a
+	// route (the outbound's own socket) and as a route rule.
+	excluded := append([]string{}, lanRoutes...)
+	rules := []any{
+		map[string]any{"action": "sniff"},
+		// Answers LAN and tunnel DNS alike, so nothing can fall back to
+		// a resolver outside the tunnel.
+		map[string]any{"action": "hijack-dns", "protocol": "dns"},
+	}
+	if serverRoute := hostRoute(serverAddr); serverRoute != "" {
+		excluded = append(excluded, serverRoute)
+		rules = append(rules, map[string]any{"ip_cidr": []string{serverRoute}, "outbound": "direct"})
+	}
+	rules = append(rules, map[string]any{"ip_cidr": lanRoutes, "outbound": "direct"})
+
 	routeMap := map[string]any{
 		"auto_detect_interface": true,
-		"rules": []any{
-			map[string]any{"action": "sniff"},
-			// Answers LAN and tunnel DNS alike, so nothing can fall back to
-			// a resolver outside the tunnel.
-			map[string]any{"action": "hijack-dns", "protocol": "dns"},
-			// Anti-loop: the VPN server is reached without the tunnel.
-			map[string]any{"domain": []string{serverDomain}, "outbound": "direct"},
-			map[string]any{"ip_cidr": lanRoutes, "outbound": "direct"},
-		},
-		"final": "proxy",
+		"rules":                 rules,
+		"final":                 "proxy",
 	}
 	if modern {
-		routeMap["default_domain_resolver"] = map[string]any{"server": "dns-local", "strategy": "prefer_ipv4"}
+		// Wajib sejak 1.12; hanya dipakai kalau ada dial yang memakai nama.
+		routeMap["default_domain_resolver"] = map[string]any{"server": "dns-tunnel", "strategy": "prefer_ipv4"}
 	}
 
 	cfg := map[string]any{
@@ -250,7 +290,7 @@ func buildSingboxConfig(p profile, port int, modern bool) ([]byte, error) {
 				"strict_route":         true,
 				"stack":                "gvisor",
 				"mtu":                  1400,
-				"route_exclude_address": lanRoutes,
+				"route_exclude_address": excluded,
 			},
 		},
 		"outbounds": []any{

@@ -38,6 +38,8 @@ Perbedaan utama dari JPS Tunnel Desktop:
 - TUN gVisor (`pantunnel-tun`) — semua trafik sistem, tidak ada aplikasi yang perlu diarahkan manual
 - Status jujur: **Connecting → Connected**, dan `Connected` hanya muncul setelah HTTP 204 benar-benar
   lewat tunnel (sekaligus membuktikan jalur DNS di dalam tunnel hidup)
+- Hostname server diresolusi ke IP sebelum tunnel naik — menghindari lingkaran bootstrap DNS, dan IP
+  server di-exclude dari route TUN supaya tidak ada routing loop
 - Kalau tunnel tidak menjawab setelah 3 percobaan, core dimatikan dan status menjadi `GAGAL:` dengan
   pesan error aslinya — bukan "Connected" palsu
 
@@ -144,6 +146,7 @@ Installer Windows (butuh Inno Setup 6):
 PanTunnel-Desktop.exe --dump-config out.json --vless "vless://uuid@host:443?type=ws&security=tls&path=/vless&sni=host&host=host#Nama"
 PanTunnel-Desktop.exe --dump-config out.json --dialect legacy   # paksa dialek 1.11
 PanTunnel-Desktop.exe --ics query                               # status ICS / hotspot (Windows)
+PanTunnel-Desktop.exe --connect 60                              # sambung 60 detik lalu putus (diagnosa; TUN naik!)
 ```
 
 Perintah `--dump-config` + `sing-box check` adalah gerbang verifikasi config: tidak menyentuh jaringan,

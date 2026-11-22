@@ -60,36 +60,53 @@ PanTunnel-Core-windows-amd64.exe check -c auto-local.json
 → (tanpa output; exit 0)
 ```
 
-## 3. Tunnel + DNS — sebagian, tanpa uji hidup penuh
+## 3. Tunnel + DNS — terverifikasi hidup
 
-Diuji pada mesin pengembang dengan core sing-box 1.14.4 sebagai klien dan sing-box 1.14.4 sebagai
-server VLESS WS TLS lokal, memakai config hasil `--dump-config`. Yang terbukti dari log core
-(`log.level=debug`):
+Server uji: profil nyata `VPN-test` (`neva.jhopanstore.my.id`, VLESS WS TLS, path `/vless`), core
+`bin/PanTunnel-Core-windows-amd64.exe` (sing-box 1.11.15) di laptop Windows 11 ini.
+
+### Connect end-to-end
+
+Jalur yang sama dengan tombol CONNECT, dijalankan lewat mode diagnosa (DNS cache di-flush dulu):
 
 ```
-INFO inbound/tun[tun-in]: started at pantunnel-tun
-INFO inbound/tun[tun-in]: inbound connection to 142.251.157.119:443
-INFO outbound/vless[proxy]: outbound connection to 142.251.157.119:443
-INFO inbound/tun[tun-in]: inbound DNS packet from 172.31.19.1:57688
-DEBUG dns: exchange example.com. IN A
-INFO outbound/vless[proxy]: outbound packet connection to 1.1.1.1:53
+> PanTunnel-Desktop.exe --connect 60
+profil: VPN-test (neva.jhopanstore.my.id:443/vless)
+status: Connected · 3228 ms (HTTP 204)
 ```
 
-- TUN `pantunnel-tun` benar-benar dibuat dan menerima trafik sistem.
-- Trafik TCP masuk TUN → sniff → keluar lewat outbound VLESS (bukan adapter fisik).
-- Query DNS masuk TUN dan dijawab resolver di dalam tunnel (`hijack-dns` bekerja).
+`Connected` hanya dicetak setelah HTTP 204 nyata lewat TUN; exit code 0.
 
-Dua hal yang **belum** diverifikasi hidup, karena uji ini memindahkan seluruh trafik laptop dan user
-meminta tidak dijalankan dulu ("bakal ganggu koneksi ku"):
+### Anti-DNS-leak (tunnel hidup)
 
-1. Query DNS langsung ke resolver adapter fisik harus gagal (`strict_route`). Sebelumnya mekanisme ini
-   terbukti bekerja di mesin yang sama pada tunnel sing-box lain yang memakai `strict_route`.
-2. **Hotspot Share** end-to-end: ICS public = `pantunnel-tun` dan klien hotspot keluar lewat VPN.
-   Yang sudah ada: skrip ICS lolos parser PowerShell, unit test parsing laporan ICS, dan pembacaan
-   status ICS hidup (`--ics query`) pada mesin pengembang — tanpa mengubah state.
+| Cek | Hasil |
+|---|---|
+| DNS sistem (`Resolve-DnsName example.com`) | `104.20.23.154` — terjawab lewat tunnel |
+| DNS adapter fisik (`-Server 192.168.10.1`) | **diblokir**, tidak ada jawaban (`strict_route` + WFP) |
+| DNS di adapter TUN | `172.31.19.2` (alamat hijack sing-box) |
+| `Find-NetRoute 1.1.1.1` | `pantunnel-tun` |
+| HTTP 204 lewat tunnel | `204` |
+| `Find-NetRoute <IP server>` | Wi-Fi, bukan TUN (anti-loop bekerja) |
 
-Langkah uji hidup ada di `docs/DNS-LEAK.md` dan `docs/HOTSPOT.md`. Jalankan hanya dengan izin user dan
-saat laptop tidak sedang dipakai kerja.
+Hasil sama seperti pada tunnel sing-box lain milik user di mesin ini (pembanding independen).
+
+### Bootstrap hostname server (bug yang ketangkap saat uji ini)
+
+Versi pertama config memakai resolver `local` untuk hostname server. Itu **deadlock**: begitu TUN naik,
+resolver sistem menunjuk ke TUN sendiri, jadi resolusi hostname server berputar di dalam tunnel:
+
+```
+ERROR dns: exchange failed for neva.jhopanstore.my.id. IN A: lookup neva.jhopanstore.my.id: i/o timeout
+```
+
+Perbaikannya: `resolveServerAddress` mengunci hostname ke IP **sebelum** tunnel naik, IP itu masuk
+`route_exclude_address` + aturan route `direct`, dan resolver lokal dihapus seluruhnya (kini hanya ada
+resolver di dalam tunnel). Setelah perbaikan, connect berhasil walau DNS cache baru di-flush.
+
+### Teardown
+
+Setelah tunnel ditutup: adapter `pantunnel-tun` hilang, tidak ada proses core tertinggal, DNS adapter
+fisik kembali `192.168.10.1`, dan koneksi internet normal.
 
 ## 4. Yang tidak diuji
 

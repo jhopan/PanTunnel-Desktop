@@ -21,22 +21,30 @@ leak caused by Windows' ordinary multihomed DNS resolution behavior"*.
 Konsekuensinya: aplikasi seperti VirtualBox bisa bermasalah pada sebagian konfigurasi. Itu harga yang
 dibayar untuk fail-closed, dan dicatat di sini supaya tidak jadi kejutan.
 
-## 2. Resolver cadangan di luar tunnel
+## 2. Tidak ada resolver di luar tunnel
 
-Config yang dihasilkan hanya punya resolver di dalam tunnel:
+Config yang dihasilkan **hanya** punya resolver di dalam tunnel:
 
 ```json
 "servers": [
-  { "tag": "dns-tunnel",  "detour": "proxy", ... "server": "1.1.1.1" },
-  { "tag": "dns-backup",  "detour": "proxy", ... "server": "8.8.8.8" },
-  { "tag": "dns-local",   "type": "local" }          // bootstrap saja
+  { "tag": "dns-tunnel", "detour": "proxy", ... "address": "1.1.1.1" },
+  { "tag": "dns-backup", "detour": "proxy", ... "address": "8.8.8.8" }
 ],
-"final": "dns-tunnel",
-"rules": [{ "domain": ["<hostname server VPN>"], "server": "dns-local" }]
+"final": "dns-tunnel"
 ```
 
-`dns-local` hanya menjawab satu nama: hostname server VPN itu sendiri, yang memang harus diresolusi
-sebelum tunnel ada. Semua nama lain (`final`) lewat `proxy`.
+Tidak ada resolver `local`.
+
+Hostname server VPN sendiri diresolusi **sebelum** tunnel naik (`resolveServerAddress`), lalu dikunci
+sebagai IP di config. Alasannya: begitu TUN aktif, resolver sistem menunjuk ke TUN, sehingga hostname
+server yang masih berupa nama akan berputar di dalam tunnel dan selalu timeout:
+
+```
+tunnel butuh server → server butuh DNS → DNS masuk tunnel → tunnel butuh server → …
+```
+
+IP server itu juga dimasukkan ke `route_exclude_address` dan ke aturan route `direct`, supaya koneksi
+ke server tidak ikut masuk TUN.
 
 ## 3. Query DNS dari aplikasi yang memilih server sendiri
 
