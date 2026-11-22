@@ -70,7 +70,7 @@ jobs:
             $env:PANTUNNEL_CORE = $core.exe
             $log = & bin/PanTunnel.exe --dump-config $out --vless $uri --dialect auto 2>&1
             Write-Host $log
-            if ($log -notmatch $core.wants) { Write-Error "dialek salah untuk $($core.name)"; $failed = $true }
+            if (($log -join "`n") -notmatch $core.wants) { Write-Error "dialek salah untuk $($core.name)"; $failed = $true }
             $check = & $core.exe check -c $out 2>&1
             $code = $LASTEXITCODE
             $check | Out-Host
