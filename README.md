@@ -160,6 +160,12 @@ tidak butuh admin.
 
 `%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`, `ics.ps1`.
 
+## macOS
+
+Binary macOS ikut dibangun (CI: `macos-intel`, `macos-apple`) dan core-nya tersedia di release `core`.
+Status macOS, langkah build, dan prosedur ujinya ada di [`docs/MACOS.md`](docs/MACOS.md) — termasuk
+celah DNS yang **belum** diperbaiki di sana.
+
 ## Test
 
 ```bash

@@ -38,6 +38,25 @@ go build -ldflags="-s -w -H windowsgui" -o bin/PanTunnel-Desktop.exe .
 
 Gio butuh CGO (gcc sudah ada di mesin ini: `C:\TDM-GCC-64\bin\gcc.exe`).
 
+### macOS
+
+Panduan lengkap + prosedur uji: [`docs/MACOS.md`](docs/MACOS.md). Ringkas:
+
+```bash
+./scripts/build-core.sh 1.11.15 darwin arm64        # → bin/PanTunnel-Core-macos-apple
+go build -ldflags="-s -w" -o bin/PanTunnel-Desktop-macos-apple .
+xattr -d com.apple.quarantine bin/PanTunnel-* 2>/dev/null
+```
+
+- Nama core harus `PanTunnel-Core-macos-apple` (arm64) atau `...-macos-intel` (x86_64): aplikasi
+  mencarinya di folder yang sama dengan binary aplikasi.
+- utun butuh admin: `runOneTimeSetup` meminta dialog admin untuk setuid pada core (sekali).
+- **Belum ada yang terverifikasi di macOS.** Jangan klaim "tanpa DNS leak" di sana sebelum poin 4 di
+  `docs/MACOS.md` lulus — sing-box tidak menyetel resolver sistem di macOS, jadi query ke DNS router
+  bisa keluar langsung.
+- Hotspot Share tidak ada implementasinya di macOS (stub). Jangan mengubah `com.apple.nat.plist` atau
+  `networksharingd` tanpa izin user.
+
 ## Gerbang verifikasi sebelum lapor "selesai"
 
 1. `go vet ./...` bersih, `go test ./...` hijau.
@@ -46,6 +65,8 @@ Gio butuh CGO (gcc sudah ada di mesin ini: `C:\TDM-GCC-64\bin\gcc.exe`).
    sing-box ≥1.12 untuk dialek modern.
 3. Perubahan UI/ICS: uji hidup hanya dengan izin user (lihat aturan di atas), dan catat apa yang
    belum diuji di `docs/VERIFICATION.md`.
+4. macOS: build + `--dump-config` + `core check` aman; uji utun (`--connect`) hanya dengan izin user,
+   lalu isi hasil 6 poin di `docs/MACOS.md` ke `docs/VERIFICATION.md`.
 
 ## Aturan kode
 
