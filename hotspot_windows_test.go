@@ -39,6 +39,9 @@ func TestICSScriptSharesTunAndRestores(t *testing.T) {
 		"$Tun",
 		"$Private",
 		"$RestorePublic",
+		// Jalur gagal harus mengembalikan sharing ke pemegang sebelumnya.
+		"RestorePublic $previousPublic",
+		"ROLLBACK=1",
 	} {
 		if !strings.Contains(icsScript, want) {
 			t.Fatalf("skrip ICS kehilangan %s", want)

@@ -38,6 +38,16 @@ function Get-ConnectionByName([string]$name) {
     return $null
 }
 
+function RestorePublic([string[]]$names) {
+    foreach ($name in $names) {
+        $conn = Get-ConnectionByName $name
+        if ($conn) {
+            $cfg = $sharing.INetSharingConfigurationForINetConnection($conn)
+            if (-not $cfg.SharingEnabled) { $cfg.EnableSharing(0) }
+        }
+    }
+}
+
 function Report {
     foreach ($conn in $sharing.EnumEveryConnection) {
         $cfg = $sharing.INetSharingConfigurationForINetConnection($conn)
@@ -55,21 +65,48 @@ function Report {
 
 try {
     if ($Action -eq 'enable') {
-        # ICS accepts exactly one shared connection: take it over from whoever holds it.
+        # ICS hanya menerima satu koneksi public. Kita ambil alih dari pemegang
+        # sekarang, tapi namanya dicatat dulu: kalau ICS menolak TUN sebagai
+        # public, sharing lama dikembalikan supaya hotspot tidak kehilangan
+        # internet karena percobaan ini.
+        $previousPublic = @()
         foreach ($conn in $sharing.EnumEveryConnection) {
             $cfg = $sharing.INetSharingConfigurationForINetConnection($conn)
             $name = [string]$sharing.NetConnectionProps($conn).Name
-            if ($cfg.SharingEnabled -and $cfg.SharingConnectionType -eq 0 -and $name -ne $Tun) { $cfg.DisableSharing() }
+            if ($cfg.SharingEnabled -and $cfg.SharingConnectionType -eq 0 -and $name -ne $Tun) {
+                $previousPublic += $name
+                $cfg.DisableSharing()
+            }
         }
         $tunConn = Get-ConnectionByName $Tun
-        if (-not $tunConn) { Write-Output ('ERROR=adapter ' + $Tun + ' tidak terdaftar di ICS'); exit 2 }
+        if (-not $tunConn) {
+            RestorePublic $previousPublic
+            Write-Output ('ERROR=adapter ' + $Tun + ' tidak terdaftar di ICS')
+            Write-Output 'ROLLBACK=1'
+            Report
+            exit 2
+        }
         $tunCfg = $sharing.INetSharingConfigurationForINetConnection($tunConn)
-        if (-not ($tunCfg.SharingEnabled -and $tunCfg.SharingConnectionType -eq 0)) { $tunCfg.EnableSharing(0) }
+        if (-not ($tunCfg.SharingEnabled -and $tunCfg.SharingConnectionType -eq 0)) {
+            try {
+                $tunCfg.EnableSharing(0)
+            } catch {
+                RestorePublic $previousPublic
+                Write-Output ('ERROR=ICS menolak ' + $Tun + ' sebagai koneksi public: ' + $_.Exception.Message)
+                Write-Output 'ROLLBACK=1'
+                Report
+                exit 3
+            }
+        }
         if ($Private -ne '') {
             $privConn = Get-ConnectionByName $Private
             if ($privConn) {
                 $privCfg = $sharing.INetSharingConfigurationForINetConnection($privConn)
-                if (-not ($privCfg.SharingEnabled -and $privCfg.SharingConnectionType -eq 1)) { $privCfg.EnableSharing(1) }
+                if (-not ($privCfg.SharingEnabled -and $privCfg.SharingConnectionType -eq 1)) {
+                    # Sisi private hanya pelengkap: kalau hotspot/WFD menolak,
+                    # public di TUN tidak perlu dibatalkan.
+                    try { $privCfg.EnableSharing(1) } catch { Write-Output ('WARN=sisi private ' + $Private + ' gagal: ' + $_.Exception.Message) }
+                }
             }
         }
     } elseif ($Action -eq 'disable') {

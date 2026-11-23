@@ -60,6 +60,31 @@ PanTunnel-Core-windows-amd64.exe check -c auto-local.json
 → (tanpa output; exit 0)
 ```
 
+## 2b. ICS menerima TUN sebagai koneksi public
+
+Pertanyaan paling berisiko sebelum fitur Hotspot Share diuji: apakah Windows ICS mau membagikan
+adapter TUN yang tidak punya default gateway (hanya route `0.0.0.0/1` + `128.0.0.0/1`)? Diuji di laptop
+ini dengan tunnel hidup:
+
+```
+> bin/PanTunnel-Desktop.exe --ics query      # baseline
+TUN_PRESENT=1
+HOTSPOT_ADAPTER=Local Area Connection* 3
+CLIENTS=0                                     ← belum ada sharing apa pun aktif
+
+> bin/PanTunnel-Desktop.exe --ics enable
+PUBLIC=pantunnel-tun                          ← ICS menerima TUN, tanpa error
+
+> bin/PanTunnel-Desktop.exe --ics disable
+TUN_PRESENT=1                                 ← kembali bersih, tidak ada PUBLIC=
+```
+
+Selama percobaan itu: HTTP 204 lewat tunnel tetap `204`, DNS sistem tetap terjawab, IP adapter TUN tidak
+berubah, adapter Wi-Fi Direct tidak tersentuh. Jadi sisi **public** aman dan reversible.
+
+Sisi **private + klien hotspot** (HP/tablet yang benar-benar tersambung ke Mobile Hotspot) belum diuji:
+butuh Mobile Hotspot menyala dan satu perangkat klien.
+
 ## 3. Tunnel + DNS — terverifikasi hidup
 
 Server uji: profil nyata `VPN-test` (`neva.jhopanstore.my.id`, VLESS WS TLS, path `/vless`), core

@@ -46,6 +46,11 @@ objek COM `HNetCfg.HNetShare`:
 | `enable` | matikan sharing public pada koneksi lain → `EnableSharing(0)` pada `pantunnel-tun` → `EnableSharing(1)` pada adapter hotspot kalau ada |
 | `disable` | `DisableSharing()` pada TUN → kembalikan sharing public ke koneksi sebelumnya |
 
+Saat `enable`, nama koneksi yang tadinya public dicatat lebih dulu. Kalau ICS menolak TUN sebagai public,
+skrip langsung menyalakan kembali sharing lama (`RestorePublic`) dan mengembalikan `ROLLBACK=1` — hotspot
+tidak dibiarkan tanpa internet gara-gara percobaan ini. Sisi private diperlakukan sebagai pelengkap:
+kalau adapter Wi-Fi Direct menolak, public di TUN tidak dibatalkan.
+
 Watchdog 15 detik (`hotspotWatch`) memeriksa ulang dan mengambil alih lagi kalau Windows mengembalikan
 sharing ke adapter fisik, misalnya setelah hotspot dimatikan-nyalakan atau jaringan berganti.
 
@@ -61,6 +66,9 @@ Windows, dan semuanya bisa dikembalikan.
 
 ## Batas yang diketahui
 
+- ICS tidak bisa membagikan adapter yang tidak punya default gateway menurut sebagian build Windows.
+  Di laptop uji ini ICS menerimanya (`PUBLIC=pantunnel-tun`, lihat `VERIFICATION.md`), tapi jalur gagal
+  tetap disiapkan: rollback otomatis ke koneksi public sebelumnya.
 - Kalau tunnel belum tersambung, tombol AKTIFKAN tetap bisa ditekan tetapi sharing ke TUN tidak
   berguna; tombol paling aman ditekan setelah status `Connected`.
 - Saat tunnel gagal, PanTunnel otomatis mengembalikan sharing ke koneksi sebelumnya — kalau prosesnya
