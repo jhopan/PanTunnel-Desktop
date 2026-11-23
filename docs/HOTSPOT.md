@@ -64,6 +64,25 @@ Windows, dan semuanya bisa dikembalikan.
 - **Administrator** — aplikasi melakukan UAC sendiri saat start.
 - Layanan `Internet Connection Sharing (ICS)` aktif (default di Windows).
 
+## Batas platform — hasil uji di Windows 11 (build 26200)
+
+Diuji di laptop Windows 11 dengan Mobile Hotspot (tethering stack baru). Hasilnya **fitur ini tidak bisa
+dipakai untuk hotspot Wi-Fi di build tersebut**:
+
+| Bukti | Hasil |
+|---|---|
+| Dropdown "Share my internet connection from" | hanya berisi adapter fisik (`Ethernet 2`); `pantunnel-tun` tidak pernah muncul, walau adapter TUN berstatus `IPv4Connectivity: Internet` dan punya default route |
+| ICS public = TUN saat hotspot **mati** | berhasil (`PUBLIC=pantunnel-tun`) |
+| ICS public = TUN saat hotspot **menyala** | ditolak: `HRESULT 0x80040201` (sharing dipegang tethering stack) |
+| Klien hotspot saat itu | internet jalan, tapi IP keluar **bukan** IP VPN (bypass lewat adapter fisik) |
+| Legacy SoftAP (`netsh wlan start hostednetwork`) | driver Wi-Fi laptop ini: `Hosted network supported: No` → tidak ada jalur ICS legacy |
+
+Jadi di Windows 11 hotspot Wi-Fi memilih sendiri adapter sumbernya (hanya adapter fisik) dan menutup
+jalan ICS legacy. Aplikasi sekarang melaporkan ini apa adanya, bukan pura-pura berhasil.
+
+Yang **masih bisa** memakai jalur ICS legacy (public = TUN): berbagi ke adapter kabel/Ethernet
+(PC/router lain), dan hotspot gaya lama (mis. Windows 10) yang masih memakai ICS.
+
 ## Batas yang diketahui
 
 - ICS tidak bisa membagikan adapter yang tidak punya default gateway menurut sebagian build Windows.

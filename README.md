@@ -51,8 +51,12 @@ Perbedaan utama dari JPS Tunnel Desktop:
 
 Detail dan cara mengujinya: [`docs/DNS-LEAK.md`](docs/DNS-LEAK.md).
 
-### Hotspot Share (baru)
-- Laptop jadi hotspot (Mobile Hotspot Windows) → klien hotspot **langsung pakai VPN**
+### Hotspot Share (baru, batas platform)
+- Membagikan adapter TUN lewat Internet Connection Sharing: klien mendapat DHCP + NAT, lalu keluar
+  lewat VPN
+- **Tidak jalan di Windows 11 Mobile Hotspot** — build itu memegang sharing sendiri dan hanya mau
+  sumber adapter fisik; lihat [`docs/HOTSPOT.md`](docs/HOTSPOT.md)
+- Jalan pada jalur ICS legacy: berbagi ke adapter kabel/Ethernet, dan hotspot gaya lama (mis. Windows 10)
 - Tunnel dijadikan koneksi yang dibagikan Windows (ICS public = `pantunnel-tun`), bukan adapter fisik
 - DHCP + NAT tetap dari Windows; klien dapat IP `192.168.137.x`, trafiknya keluar lewat VPN
 - Jumlah klien yang lewat VPN ditampilkan di kartu Hotspot Share

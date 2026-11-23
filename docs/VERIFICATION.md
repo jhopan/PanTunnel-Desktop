@@ -82,8 +82,18 @@ TUN_PRESENT=1                                 ← kembali bersih, tidak ada PUBL
 Selama percobaan itu: HTTP 204 lewat tunnel tetap `204`, DNS sistem tetap terjawab, IP adapter TUN tidak
 berubah, adapter Wi-Fi Direct tidak tersentuh. Jadi sisi **public** aman dan reversible.
 
-Sisi **private + klien hotspot** (HP/tablet yang benar-benar tersambung ke Mobile Hotspot) belum diuji:
-butuh Mobile Hotspot menyala dan satu perangkat klien.
+Sisi **private + klien hotspot** sudah diuji (2026-11-23) dan **gagal** — batas platform, bukan bug:
+
+| Uji | Hasil |
+|---|---|
+| `--ics enable` saat Mobile Hotspot menyala | ditolak `HRESULT 0x80040201` (sharing dipegang tethering stack) |
+| Dropdown "Share my internet connection from" | hanya `Ethernet 2`; TUN tidak pernah muncul (walau `IPv4Connectivity: Internet` + punya default route) |
+| Klien di hotspot | internet jalan, **IP keluar bukan IP VPN** → bypass lewat adapter fisik |
+| `netsh wlan show drivers` | `Hosted network supported: No` → tidak ada jalur SoftAP legacy |
+| Setelah percobaan | seluruh perubahan dibalik: ICS tanpa public, route uji dihapus, hotspot dimatikan, host tetap `204` |
+
+Kesimpulan: di Windows 11 Mobile Hotspot, klien hotspot tidak bisa dipaksa lewat VPN dengan ICS.
+Aplikasi kini melaporkan pesan itu, dan jalur ICS legacy tetap tersedia untuk berbagi ke adapter kabel.
 
 ## 3. Tunnel + DNS — terverifikasi hidup
 

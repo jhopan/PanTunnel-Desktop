@@ -59,7 +59,13 @@ function Report {
     $wfd = @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object { $_.InterfaceDescription -like '*Wi-Fi Direct*' })
     foreach ($adapter in $wfd) { Write-Output ('HOTSPOT_ADAPTER=' + $adapter.Name) }
     if ($wfd | Where-Object { $_.Status -eq 'Up' }) { Write-Output 'HOTSPOT_UP=1' }
-    $clients = @(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -like ($Subnet + '*') -and $_.State -ne 'Unreachable' })
+    # Permanent = entri statis milik SoftAP/SSDP, bukan perangkat klien.
+    $clients = @(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {
+        $_.IPAddress -like ($Subnet + '*') -and
+        $_.IPAddress -notlike '*.255' -and
+        $_.State -ne 'Unreachable' -and
+        $_.State -ne 'Permanent'
+    })
     Write-Output ('CLIENTS=' + $clients.Count)
 }
 
@@ -167,6 +173,13 @@ func hotspotEnable(restoreHint string) (string, error) {
 	out, err := runICS("-Action", "enable", "-Tun", tunInterfaceName, "-Private", state.Adapter)
 	res := parseHotspotQuery(out)
 	if res.Note != "" {
+		if state.Active {
+			// Windows 11 Mobile Hotspot memegang sharing-nya sendiri; ICS menolak
+			// diambil alih (HRESULT 0x80040201) dan daftar sumbernya cuma berisi
+			// adapter fisik. Itu batas platform, bukan bug config.
+			return before, &hotspotError{"Mobile Hotspot Windows 11 memegang koneksi sharing sendiri dan menolak adapter VPN: " +
+				res.Note + " — hotspot Wi-Fi tidak bisa dibagikan lewat VPN di build ini."}
+		}
 		return before, errText(res.Note, err)
 	}
 	if !res.Shared {
