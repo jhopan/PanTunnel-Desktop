@@ -20,6 +20,11 @@ import (
 // mencegah file dibagikan sembarangan antar perangkat dan memudahkan
 // kedaluwarsa — sama seperti desain lisensi offline di aplikasi Android.
 // Rincian: docs/LISENSI-HWID.md
+// androidLicensePrefix: awalan file terkunci dari PanTunnel Android (LicenseCodec.kt).
+// Formatnya berbeda (PNT1: + base64 biner, kunci SHA-256(hwid+salt), payload lain),
+// jadi file itu tidak bisa dibuka di desktop.
+const androidLicensePrefix = "PNT1:"
+
 const (
 	licenseVersion = 1
 	licenseSalt    = "PanTunnel-license-v1"

@@ -173,3 +173,17 @@ func TestImportLicenseAddsProfile(t *testing.T) {
 		t.Fatalf("status harus GAGAL untuk lisensi asing: %q", u.status)
 	}
 }
+
+// File terkunci dari aplikasi Android memakai format lain (PNT1:…) dan tidak
+// boleh menambah profil; pesannya harus jelas, bukan "tidak ada URI".
+func TestImportRejectsAndroidLockedFile(t *testing.T) {
+	t.Setenv("PANTUNNEL_DATA_DIR", t.TempDir())
+	u := &uiState{data: configData{InstallationID: "0123456789abcdef"}}
+	u.importText("test.pantunnel", "PNT1:AQECAwQFBgcICQoLDA0ODw==")
+	if len(u.data.Profiles) != 0 {
+		t.Fatal("file Android tidak boleh menghasilkan profil")
+	}
+	if !strings.Contains(u.status, "Android") || !strings.Contains(u.status, "PNT1") {
+		t.Fatalf("pesan harus menjelaskan file Android: %q", u.status)
+	}
+}

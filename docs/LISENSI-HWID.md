@@ -59,6 +59,46 @@ itu**.
 - Profil yang masuk dari lisensi membawa `license_expire` di `settings.json`; tombol CONNECT menolak
   profil yang lisensinya sudah lewat.
 
+## Kompatibilitas dengan aplikasi Android
+
+Aplikasi Android ([PanTunnel-Android](https://github.com/jhopan/PanTunnel-Android)) juga punya lisensi
+offline berbasis HWID. **Konsepnya sama, formatnya beda** — jadi file terkunci Android tidak bisa
+dibuka di desktop, dan sebaliknya.
+
+| | Android (`LicenseCodec.kt`) | Desktop (`license.go`) |
+|---|---|---|
+| Wadah | teks `PNT1:` + base64(versi ‖ IV ‖ ciphertext) | JSON `{v, hwid, expire, nonce, data}` |
+| Kunci | `SHA-256(hwid + "pantunnel-license-v1")` | `SHA-256("PanTunnel-license-v1|" + hwid)` |
+| AAD | tidak ada | `versi:hwid:expire` |
+| Payload | `{v: uri, n: nama, h: hwid, l: lock, e: expiryMillis}` | `{name, uri, expire:"YYYY-MM-DD", issued}` |
+| Kedaluwarsa | epoch milidetik | tanggal `YYYY-MM-DD` (berlaku sampai akhir hari) |
+
+Yang **sama**: derivasi HWID, yaitu `SHA-256(installation id)` → 24 karakter hex huruf besar. Bedanya,
+`installation id` dibuat acak **per instalasi** (Android: UUID di SharedPreferences; desktop: 16 byte acak
+di `settings.json`), jadi HWID HP ≠ HWID laptop.
+
+Akibatnya ada dua lapis penolakan untuk file Android:
+
+1. **Format**: bukan JSON lisensi desktop dan tidak memuat URI `vless://` (isinya terenkripsi) → aplikasi
+   menampilkan pesan bahwa file terkunci Android (`PNT1:`) belum didukung.
+2. **HWID**: seandainya formatnya disamakan, file itu tetap milik HWID HP, bukan laptop.
+
+Yang **sudah bisa lintas platform hari ini**: export **plain** dari Android (isi `.pantunnel` = URI
+`vless://` mentah, tanpa enkripsi) — impor di desktop lewat tombol **File** atau **Clipboard**, karena
+isinya teks biasa. Ini juga jalur yang disarankan kalau pelanggan tidak butuh pengikatan HWID.
+
+Pilihan kalau ingin satu lisensi terkunci untuk dua perangkat:
+
+| Cara | Konsekuensi |
+|---|---|
+| Mint satu file per perangkat (HWID HP + HWID laptop) | paling benar, kunci HWID tetap utuh; admin menerbitkan 2 file |
+| Samakan `installation id` kedua aplikasi | praktis tidak mungkin di Android tanpa root/backup, dan menyalin `settings.json` |
+| Tambah "lisensi portabel" (HWID kosong = semua perangkat) | satu file jalan di mana saja, tapi artinya melepas pengikatan HWID |
+| Samakan format (desktop memakai `PNT1:`) | satu format untuk kedua app, **tetap** harus cocok HWID-nya |
+
+Belum dikerjakan: decoder `PNT1:` di desktop, dan lisensi portabel. Keduanya keputusan produk, bukan
+sekadar teknis.
+
 ## Batas keamanan (baca ini sebelum menjual)
 
 Ini **bukan DRM kriptografis**. Kunci diturunkan dari HWID, dan HWID ditampilkan di aplikasi, jadi

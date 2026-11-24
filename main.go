@@ -921,6 +921,13 @@ func (u *uiState) importFromFile() {
 // satu atau banyak URI vless://. Satu URI → form edit untuk dikonfirmasi;
 // banyak URI → langsung masuk daftar profil.
 func (u *uiState) importText(source, text string) {
+	trimmed := strings.TrimSpace(text)
+	if strings.HasPrefix(trimmed, androidLicensePrefix) {
+		// Format lisensi aplikasi Android (PNT1:) — kunci dan payload-nya beda.
+		u.status = "GAGAL: file terkunci dari aplikasi Android (format PNT1) belum didukung di desktop. " +
+			"Minta lisensi desktop (.pantunnel JSON), atau dari Android pakai export 'plain' berisi URI vless://."
+		return
+	}
 	if isLicenseFile([]byte(text)) {
 		u.importLicense(text)
 		return
