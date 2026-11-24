@@ -41,6 +41,43 @@ var lanRoutes = []string{
 	"169.254.0.0/16",
 }
 
+// parseURIList mengumpulkan semua URI vless:// dari teks apa pun (clipboard,
+// file .txt/.json/.conf): URI yang tidak didukung dilewati, duplikat dibuang.
+func parseURIList(text string) []profile {
+	var out []profile
+	seen := map[string]bool{}
+	rest := text
+	for {
+		idx := strings.Index(rest, "vless://")
+		if idx < 0 {
+			return out
+		}
+		rest = rest[idx:]
+		end := strings.IndexAny(rest, " \t\r\n\"',;")
+		raw := rest
+		if end >= 0 {
+			raw = rest[:end]
+		}
+		rest = rest[len(raw):]
+
+		p, err := parseVLESS(raw)
+		if err != nil {
+			continue
+		}
+		key := profileKey(p)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, p)
+	}
+}
+
+// profileKey dipakai untuk membuang duplikat saat import.
+func profileKey(p profile) string {
+	return p.Address + "|" + p.Port + "|" + p.UUID + "|" + p.Path + "|" + p.SNI + "|" + p.Host
+}
+
 // coreVersionRe matches the banner printed by `sing-box version`.
 var coreVersionRe = regexp.MustCompile(`v?(\d+)\.(\d+)\.`)
 

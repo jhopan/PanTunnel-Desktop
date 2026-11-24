@@ -871,17 +871,12 @@ func (u *uiState) deleteProfile(id string) {
 }
 
 func (u *uiState) importFromClipboard() {
-	clip := strings.TrimSpace(readClipboard())
-	if clip == "" || !strings.Contains(clip, "vless://") {
-		u.status = "GAGAL: clipboard kosong atau bukan URI vless://"
+	clip := readClipboard()
+	if strings.TrimSpace(clip) == "" {
+		u.status = "GAGAL: clipboard kosong."
 		return
 	}
-	idx := strings.Index(clip, "vless://")
-	clip = clip[idx:]
-	if end := strings.IndexAny(clip, " \r\n\t"); end != -1 {
-		clip = clip[:end]
-	}
-	u.importRawURI(clip)
+	u.importText("clipboard", clip)
 }
 
 func (u *uiState) importFromFile() {
@@ -894,25 +889,62 @@ func (u *uiState) importFromFile() {
 		u.status = "GAGAL: file tidak bisa dibaca."
 		return
 	}
-	text := strings.TrimSpace(string(raw))
-	idx := strings.Index(text, "vless://")
-	if idx == -1 {
-		u.status = "GAGAL: file tidak berisi konfigurasi vless://"
-		return
-	}
-	text = text[idx:]
-	if end := strings.IndexAny(text, " \r\n\t"); end != -1 {
-		text = text[:end]
-	}
-	u.importRawURI(text)
+	u.importText(filepath.Base(filePath), string(raw))
 }
 
-func (u *uiState) importRawURI(raw string) {
-	p, err := parseVLESS(strings.TrimSpace(raw))
-	if err != nil {
-		u.status = "GAGAL: import butuh URI vless:// WS + TLS."
+// importText menambahkan profil dari teks (clipboard atau isi file) yang memuat
+// satu atau banyak URI vless://. Satu URI → form edit untuk dikonfirmasi;
+// banyak URI → langsung masuk daftar profil.
+func (u *uiState) importText(source, text string) {
+	list := parseURIList(text)
+	if len(list) == 0 {
+		u.status = "GAGAL: tidak ada URI vless:// WS + TLS di " + source + "."
 		return
 	}
+	if len(list) == 1 {
+		u.prefillEdit(list[0])
+		return
+	}
+
+	added := 0
+	for _, p := range list {
+		if u.hasProfile(p) {
+			continue
+		}
+		p.ID = newID()
+		if p.Name == "" {
+			p.Name = p.Address
+		}
+		u.data.Profiles = append(u.data.Profiles, p)
+		added++
+	}
+	if added == 0 {
+		u.status = "Tidak ada profil baru di " + source + " (semua sudah ada)."
+		return
+	}
+	if u.data.ActiveID == "" {
+		u.data.ActiveID = u.data.Profiles[0].ID
+	}
+	u.ensureButtons()
+	saveConfig(u.data)
+	u.screen = screenMain
+	u.status = fmt.Sprintf("%d profil diimpor dari %s · %d duplikat dilewati.", added, source, len(list)-added)
+	u.invalidate()
+}
+
+func (u *uiState) hasProfile(p profile) bool {
+	key := profileKey(p)
+	for _, existing := range u.data.Profiles {
+		if profileKey(existing) == key {
+			return true
+		}
+	}
+	return false
+}
+
+// prefillEdit membuka form edit dengan isi URI yang baru diimpor; user masih
+// bisa mengubah nama/SNI sebelum menyimpan.
+func (u *uiState) prefillEdit(p profile) {
 	u.editID = ""
 	u.edName.SetText(p.Name)
 	u.edAddress.SetText(p.Address)

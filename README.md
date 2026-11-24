@@ -51,7 +51,12 @@ Perbedaan utama dari JPS Tunnel Desktop:
 Detail dan cara mengujinya: [`docs/DNS-LEAK.md`](docs/DNS-LEAK.md).
 
 ### Profil & Core
-- Multi-profil — import dari clipboard (`vless://`) atau file `.txt`/`.jps`
+- Multi-profil — tombol **Clipboard** dan **File** di header
+  - satu URI di clipboard/file → form edit terbuka untuk dikonfirmasi
+  - **banyak URI sekaligus** → langsung masuk daftar profil, duplikat dilewati
+  - file yang diterima: `.txt`, `.json`, `.conf`, `.jps`, `.pantunnel` (atau Semua File)
+  - URI non WS+TLS dilewati tanpa membatalkan URI lain di file yang sama
+- Tidak ada export: profil hanya hidup di `settings.json` lokal
 - Kartu profil: Pilih / Edit / Hapus, profil aktif ditandai border hijau
 - Dialek config dideteksi otomatis dari `core version` (legacy untuk sing-box 1.11.x, modern untuk ≥1.12)
 - Core dicari di folder aplikasi: `PanTunnel-Core-windows-amd64.exe`, `JPS-Tunnel-Core-windows-amd64.exe`,
@@ -143,6 +148,11 @@ tidak butuh admin.
 ## Data aplikasi
 
 `%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`.
+
+**Device HWID** di layar Pengaturan hanya **ditampilkan**: tidak ada fitur yang memakainya (tidak ada
+export profil terkunci maupun lisensi di versi desktop). Nilainya diturunkan dari `installation_id`
+acak yang disimpan di `settings.json`, jadi bukan ID perangkat keras — menyalin file itu akan menyalin
+HWID-nya juga. Berguna hanya kalau kamu butuh identitas untuk didaftarkan ke admin/server.
 
 ## macOS
 

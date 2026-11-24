@@ -59,7 +59,12 @@ const (
 
 func chooseImportFile() (string, error) {
 	var filter []uint16
-	for _, part := range []string{"JPS / VLESS (*.jps;*.txt)", "*.jps;*.txt", "Semua File (*.*)", "*.*"} {
+	for _, part := range []string{
+		"Konfigurasi VLESS (*.txt;*.json;*.conf;*.jps;*.pantunnel)",
+		"*.txt;*.json;*.conf;*.jps;*.pantunnel",
+		"Semua File (*.*)",
+		"*.*",
+	} {
 		filter = append(filter, utf16.Encode([]rune(part))...)
 		filter = append(filter, 0)
 	}

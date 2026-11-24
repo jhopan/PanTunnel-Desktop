@@ -283,3 +283,57 @@ func TestConfigCoreLogEnv(t *testing.T) {
 		t.Fatalf("PANTUNNEL_CORE_LOG harus menyalakan log debug ke file: %#v", logMap)
 	}
 }
+
+// Import harus tahan terhadap teks apa pun: banyak URI, JSON, duplikat, dan URI
+// yang tidak didukung (bukan WS+TLS) yang harus dilewati tanpa membatalkan
+// sisanya.
+func TestParseURIList(t *testing.T) {
+	blob := `{
+  "catatan": "kumpulan server",
+  "utama": "vless://11111111-1111-1111-1111-111111111111@a.example:443?type=ws&security=tls&path=%2Fws&sni=a.example&host=a.example#Server-A",
+  "duplikat": "vless://11111111-1111-1111-1111-111111111111@a.example:443?type=ws&security=tls&path=%2Fws&sni=a.example&host=a.example#Server-A",
+  "tcp": "vless://22222222-2222-2222-2222-222222222222@b.example:443?type=tcp&security=tls#Tidak-Didukung",
+  "kedua": "vless://33333333-3333-3333-3333-333333333333@c.example:8443?type=ws&security=tls&path=%2Fvless&sni=c.example&host=c.example#Server-C"
+}`
+	list := parseURIList(blob)
+	if len(list) != 2 {
+		t.Fatalf("harus 2 profil unik yang didukung, dapat %d: %#v", len(list), list)
+	}
+	if list[0].Name != "Server-A" || list[0].Port != "443" || list[0].Path != "/ws" {
+		t.Fatalf("profil pertama salah: %#v", list[0])
+	}
+	if list[1].Name != "Server-C" || list[1].Port != "8443" {
+		t.Fatalf("profil kedua salah: %#v", list[1])
+	}
+
+	// Pemanggilan ulang pada hasil yang sama harus tetap 2 (idempoten).
+	if again := parseURIList(blob); len(again) != 2 {
+		t.Fatalf("hasil tidak konsisten: %d", len(again))
+	}
+
+	if got := parseURIList("tidak ada URI di sini"); len(got) != 0 {
+		t.Fatalf("teks tanpa URI harus kosong: %#v", got)
+	}
+}
+
+func TestHasProfileDetectsDuplicate(t *testing.T) {
+	p, err := parseVLESS(sampleURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := &uiState{}
+	if u.hasProfile(p) {
+		t.Fatal("daftar kosong tidak boleh menganggap profil sudah ada")
+	}
+	same := p
+	same.ID = "beda-id"
+	u.data.Profiles = []profile{same}
+	if !u.hasProfile(p) {
+		t.Fatal("profil dengan alamat+uuid+path sama harus dianggap duplikat")
+	}
+	other := p
+	other.UUID = "99999999-9999-9999-9999-999999999999"
+	if u.hasProfile(other) {
+		t.Fatal("uuid berbeda bukan duplikat")
+	}
+}

@@ -11,7 +11,14 @@ disebut belum diuji.
 --- PASS: TestParsePort
 --- PASS: TestConfigLeakProtection
 --- PASS: TestConfigDialects
+--- PASS: TestHostRoute
+--- PASS: TestResolveServerAddressKeepsLiteralIP
 --- PASS: TestParseCoreVersion
+--- PASS: TestNormalizePingInterval
+--- PASS: TestConfigCoreLogEnv
+--- PASS: TestParseURIList
+--- PASS: TestHasProfileDetectsDuplicate
+--- PASS: TestClaimInstanceDetectsDuplicate
 ok  github.com/jhopan/PanTunnel-Desktop
 ```
 
