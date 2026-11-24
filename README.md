@@ -51,7 +51,7 @@ Perbedaan utama dari JPS Tunnel Desktop:
 Detail dan cara mengujinya: [`docs/DNS-LEAK.md`](docs/DNS-LEAK.md).
 
 ### Profil & Core
-- Multi-profil — tombol **Clipboard** dan **File** di header
+- Multi-profil — tombol **Clipboard** dan **File** di header (termasuk file lisensi `.pantunnel`)
   - satu URI di clipboard/file → form edit terbuka untuk dikonfirmasi
   - **banyak URI sekaligus** → langsung masuk daftar profil, duplikat dilewati
   - file yang diterima: `.txt`, `.json`, `.conf`, `.jps`, `.pantunnel` (atau Semua File)
@@ -139,20 +139,29 @@ Installer Windows (butuh Inno Setup 6):
 # tulis config yang persis dipakai GUI, tanpa menjalankan aplikasi
 PanTunnel-Desktop.exe --dump-config out.json --vless "vless://uuid@host:443?type=ws&security=tls&path=/vless&sni=host&host=host#Nama"
 PanTunnel-Desktop.exe --dump-config out.json --dialect legacy   # paksa dialek 1.11
+PanTunnel-Desktop.exe --license-create out.pantunnel --hwid <HWID> --vless <uri> --name "Pelanggan" --expire 2027-12-31
+PanTunnel-Desktop.exe --license-info out.pantunnel              # periksa lisensi (read-only)
 PanTunnel-Desktop.exe --connect 60                              # sambung 60 detik lalu putus (diagnosa; TUN naik!)
 ```
 
 Perintah `--dump-config` + `sing-box check` adalah gerbang verifikasi config: tidak menyentuh jaringan,
-tidak butuh admin.
+tidak butuh admin. `--license-create`/`--license-info` adalah tooling admin untuk lisensi HWID.
+
+Env yang berguna: `PANTUNNEL_CORE` (paksa path core), `PANTUNNEL_CORE_LOG` (log debug core ke file),
+`PANTUNNEL_DATA_DIR` (pakai folder data lain — dipakai test dan dukungan teknis), `PANTUNNEL_HWID`
+(HWID untuk `--license-create`).
 
 ## Data aplikasi
 
 `%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`.
 
-**Device HWID** di layar Pengaturan hanya **ditampilkan**: tidak ada fitur yang memakainya (tidak ada
-export profil terkunci maupun lisensi di versi desktop). Nilainya diturunkan dari `installation_id`
-acak yang disimpan di `settings.json`, jadi bukan ID perangkat keras — menyalin file itu akan menyalin
-HWID-nya juga. Berguna hanya kalau kamu butuh identitas untuk didaftarkan ke admin/server.
+**Device HWID** (layar Pengaturan, tombol **SALIN HWID**) dipakai untuk **lisensi offline**: pelanggan
+mengirim HWID-nya, admin membuat file `.pantunnel` dengan `--license-create`, dan pelanggan mengimpor
+file itu lewat tombol **File**. File hanya bisa dibuka perangkat dengan HWID yang cocok dan bisa diberi
+tanggal kedaluwarsa; CONNECT ditolak kalau lisensi profil itu sudah lewat.
+
+Format, perintah admin, dan **batas keamanannya** (ini obfuscation, bukan DRM kriptografis — kunci
+diturunkan dari HWID yang ditampilkan di aplikasi): [`docs/LISENSI-HWID.md`](docs/LISENSI-HWID.md).
 
 ## macOS
 

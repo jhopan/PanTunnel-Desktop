@@ -71,3 +71,9 @@ xattr -d com.apple.quarantine bin/PanTunnel-* 2>/dev/null
 - Setiap penambahan konfigurasi anti-leak harus punya test di `singbox_test.go` yang gagal kalau field
   itu hilang.
 - Bahasa UI: Indonesia, istilah teknis tidak diterjemahkan.
+- Format lisensi `.pantunnel` (AES-256-GCM, kunci dari HWID, header sebagai AAD) tidak boleh diubah tanpa
+  test di `license_test.go` — file yang sudah dikirim ke pelanggan harus tetap terbaca.
+- **MUST NOT** menambah tombol export profil/lisensi di GUI: pembuatan lisensi hanya lewat
+  `--license-create` (tooling admin, keputusan user).
+- Test yang menulis `settings.json` wajib memakai `PANTUNNEL_DATA_DIR` ke folder sementara supaya data
+  user tidak tersentuh.

@@ -68,6 +68,8 @@ type profile struct {
 	Path    string `json:"path"`
 	SNI     string `json:"sni"`
 	Host    string `json:"host"`
+	// LicenseExpire diisi hanya kalau profil datang dari file lisensi .pantunnel.
+	LicenseExpire string `json:"license_expire,omitempty"`
 }
 
 type configData struct {
@@ -109,6 +111,7 @@ type uiState struct {
 	btnSaveProfile   widget.Clickable
 	btnCancelProfile widget.Clickable
 	btnSaveSettings  widget.Clickable
+	btnCopyHWID      widget.Clickable
 
 	selectButtons []widget.Clickable
 	editButtons   []widget.Clickable
@@ -639,6 +642,28 @@ func (u *uiState) drawSettingsScreen(gtx layout.Context, th *material.Theme) lay
 						l.Color = color.NRGBA{R: 0, G: 229, B: 255, A: 255} // Cyan
 						return l.Layout(gtx)
 					}),
+					layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						for u.btnCopyHWID.Clicked(gtx) {
+							u.copyHWID()
+						}
+						b := material.Button(th, &u.btnCopyHWID, "SALIN HWID")
+						b.Background = color.NRGBA{R: 22, G: 27, B: 34, A: 255}
+						b.Color = color.NRGBA{R: 201, G: 209, B: 217, A: 255}
+						b.TextSize = unit.Sp(11)
+						b.CornerRadius = unit.Dp(4)
+						return b.Layout(gtx)
+					}),
+					layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						label := "Kirim HWID ini ke admin untuk mendapat file lisensi .pantunnel."
+						if p := u.getActiveProfile(); p != nil && p.LicenseExpire != "" {
+							label = "Profil aktif: " + licenseSummary(p.LicenseExpire) + "."
+						}
+						l := material.Label(th, unit.Sp(10), label)
+						l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
+						return l.Layout(gtx)
+					}),
 				)
 			})
 		}),
@@ -896,6 +921,10 @@ func (u *uiState) importFromFile() {
 // satu atau banyak URI vless://. Satu URI → form edit untuk dikonfirmasi;
 // banyak URI → langsung masuk daftar profil.
 func (u *uiState) importText(source, text string) {
+	if isLicenseFile([]byte(text)) {
+		u.importLicense(text)
+		return
+	}
 	list := parseURIList(text)
 	if len(list) == 0 {
 		u.status = "GAGAL: tidak ada URI vless:// WS + TLS di " + source + "."
@@ -929,6 +958,40 @@ func (u *uiState) importText(source, text string) {
 	saveConfig(u.data)
 	u.screen = screenMain
 	u.status = fmt.Sprintf("%d profil diimpor dari %s · %d duplikat dilewati.", added, source, len(list)-added)
+	u.invalidate()
+}
+
+// importLicense membuka file lisensi .pantunnel memakai HWID perangkat ini.
+func (u *uiState) importLicense(text string) {
+	p, err := openLicense([]byte(text), makeHWID(u.data.InstallationID), time.Now())
+	if err != nil {
+		u.status = "GAGAL: " + err.Error()
+		return
+	}
+	if u.hasProfile(p) {
+		u.status = "Profil dari lisensi ini sudah ada di daftar."
+		return
+	}
+	p.ID = newID()
+	u.data.Profiles = append(u.data.Profiles, p)
+	if u.data.ActiveID == "" {
+		u.data.ActiveID = p.ID
+	}
+	u.ensureButtons()
+	saveConfig(u.data)
+	u.screen = screenMain
+	u.status = fmt.Sprintf("Lisensi OK: profil %s ditambahkan (%s).", p.Name, licenseSummary(p.LicenseExpire))
+	u.invalidate()
+}
+
+// copyHWID menaruh HWID di clipboard supaya bisa dikirim ke admin.
+func (u *uiState) copyHWID() {
+	hwid := makeHWID(u.data.InstallationID)
+	if err := writeClipboard(hwid); err != nil {
+		u.status = "GAGAL: HWID tidak bisa disalin — " + err.Error()
+		return
+	}
+	u.status = "HWID disalin ke clipboard: " + hwid
 	u.invalidate()
 }
 
@@ -1015,6 +1078,10 @@ func (u *uiState) start() {
 	port, err := parsePort(p.Port)
 	if err != nil {
 		u.status = "GAGAL: port server tidak valid."
+		return
+	}
+	if licenseExpired(p.LicenseExpire, time.Now()) {
+		u.status = "GAGAL: lisensi profil ini sudah kedaluwarsa (" + p.LicenseExpire + ")."
 		return
 	}
 	core, err := coreExecutable()
@@ -1257,6 +1324,11 @@ func probeTunnel(target string) (time.Duration, int, error) {
 }
 
 func appDataDir() string {
+	// PANTUNNEL_DATA_DIR dipakai test dan dukungan teknis supaya bisa bekerja
+	// tanpa menyentuh settings.json user.
+	if dir := strings.TrimSpace(os.Getenv("PANTUNNEL_DATA_DIR")); dir != "" {
+		return dir
+	}
 	d, err := os.UserConfigDir()
 	if err != nil {
 		return "."

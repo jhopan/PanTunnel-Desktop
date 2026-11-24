@@ -6,6 +6,14 @@ disebut belum diuji.
 ## 1. Test unit — `go test ./...`
 
 ```
+--- PASS: TestLicenseRoundTrip
+--- PASS: TestLicenseRejectsOtherHWID
+--- PASS: TestLicenseRejectsExpired
+--- PASS: TestLicenseRejectsTamperedHeader
+--- PASS: TestCreateLicenseValidation
+--- PASS: TestIsLicenseFileRejectsOrdinaryText
+--- PASS: TestLicenseExpiredBoundaries
+--- PASS: TestImportLicenseAddsProfile
 --- PASS: TestParseVLESSWebSocketTLS
 --- PASS: TestRejectNonWebSocketTLS
 --- PASS: TestParsePort

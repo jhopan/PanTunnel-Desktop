@@ -26,6 +26,14 @@ func readClipboard() string {
 	return strings.TrimSpace(string(out))
 }
 
+// writeClipboard menaruh teks di clipboard lewat PowerShell (tanpa dependency baru).
+func writeClipboard(text string) error {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-Command", "[Console]::In.ReadToEnd().Trim() | Set-Clipboard")
+	cmd.Stdin = strings.NewReader(text)
+	setNoConsole(cmd)
+	return cmd.Run()
+}
+
 type openFileNameW struct {
 	lStructSize       uint32
 	hwndOwner         uintptr
