@@ -38,7 +38,7 @@ import (
 const (
 	appName = "PanTunnel"
 	// appVersion di-bump saat rilis; lihat juga setup.iss.
-	appVersion     = "1.0.1"
+	appVersion     = "1.1.0"
 	defaultPingURL = "http://connectivitycheck.gstatic.com/generate_204"
 	// 3 detik = handshake TLS baru tiap 3 detik lewat tunnel. 15 detik sudah
 	// cukup untuk tampilan ping dan jauh lebih hemat CPU/koneksi.
