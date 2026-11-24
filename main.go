@@ -36,9 +36,14 @@ import (
 )
 
 const (
-	appName        = "PanTunnel"
-	appVersion     = "1.0.0"
+	appName = "PanTunnel"
+	// appVersion di-bump saat rilis; lihat juga setup.iss.
+	appVersion     = "1.0.1"
 	defaultPingURL = "http://connectivitycheck.gstatic.com/generate_204"
+	// 3 detik = handshake TLS baru tiap 3 detik lewat tunnel. 15 detik sudah
+	// cukup untuk tampilan ping dan jauh lebih hemat CPU/koneksi.
+	defaultPingInterval = 15
+	minPingInterval     = 5
 )
 
 //go:embed assets/app_icon.png
@@ -72,10 +77,6 @@ type configData struct {
 	PingInterval   int       `json:"ping_interval"`
 	PingURL        string    `json:"ping_url"`
 	InstallationID string    `json:"installation_id"`
-	// Hotspot sharing: hand the tunnel to devices on the laptop's hotspot.
-	HotspotShare bool `json:"hotspot_share"`
-	// Connection that shared internet before us, restored on disconnect.
-	HotspotRestore string `json:"hotspot_restore"`
 }
 
 type currentScreen int
@@ -98,9 +99,6 @@ type uiState struct {
 	cmd      *exec.Cmd
 	mu       sync.Mutex
 	stopPing chan struct{}
-	stopJob  chan struct{}
-
-	hotspot hotspotStatus
 
 	btnConnect       widget.Clickable
 	btnNavClipboard  widget.Clickable
@@ -111,7 +109,6 @@ type uiState struct {
 	btnSaveProfile   widget.Clickable
 	btnCancelProfile widget.Clickable
 	btnSaveSettings  widget.Clickable
-	btnHotspot       widget.Clickable
 
 	selectButtons []widget.Clickable
 	editButtons   []widget.Clickable
@@ -141,7 +138,7 @@ func main() {
 		focusExistingWindow()
 		os.Exit(0)
 	}
-	// UAC prompt for TUN + ICS. On Linux/macOS this is a no-op.
+	// UAC prompt for TUN. On Linux/macOS this is a no-op.
 	// ensureElevated melepas mutex sebelum relaunch supaya instance elevated
 	// bisa mengambilnya.
 	if !ensureElevated() {
@@ -171,7 +168,6 @@ func run() {
 	var ops op.Ops
 	u := initUI(loadConfig())
 	u.win = w
-	go u.hotspotWatch()
 	for {
 		switch e := w.Event().(type) {
 		case app.DestroyEvent:
@@ -186,13 +182,20 @@ func run() {
 	}
 }
 
+// normalizePingInterval menjaga interval probe di rentang yang masuk akal:
+// terlalu kecil berarti handshake TCP+TLS+WS baru lewat tunnel tiap beberapa detik.
+func normalizePingInterval(seconds int) int {
+	if seconds < minPingInterval {
+		return defaultPingInterval
+	}
+	return seconds
+}
+
 func initUI(cfg configData) *uiState {
 	if cfg.InstallationID == "" {
 		cfg.InstallationID = newID()
 	}
-	if cfg.PingInterval < 1 {
-		cfg.PingInterval = 3
-	}
+	cfg.PingInterval = normalizePingInterval(cfg.PingInterval)
 	if cfg.PingURL == "" {
 		cfg.PingURL = defaultPingURL
 	}
@@ -214,11 +217,10 @@ func initUI(cfg configData) *uiState {
 	}
 
 	u := &uiState{
-		data:    cfg,
-		screen:  screenMain,
-		status:  "Disconnected",
-		pingMs:  "-",
-		hotspot: hotspotStatus{Supported: hotspotPlatformSupported},
+		data:   cfg,
+		screen: screenMain,
+		status: "Disconnected",
+		pingMs: "-",
 	}
 	u.profileList.Axis = layout.Vertical
 
@@ -442,10 +444,6 @@ func (u *uiState) drawMainScreen(gtx layout.Context, th *material.Theme) layout.
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawHotspotCard(gtx, th)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				l := material.Label(th, unit.Sp(11), "v"+appVersion+" • By JhopanStore")
 				l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
@@ -579,78 +577,6 @@ func (u *uiState) drawStatusCard(gtx layout.Context, th *material.Theme) layout.
 	})
 }
 
-// drawHotspotCard exposes hotspot sharing: with it on, devices on the laptop's
-// hotspot keep Windows DHCP/NAT but egress through the tunnel.
-func (u *uiState) drawHotspotCard(gtx layout.Context, th *material.Theme) layout.Dimensions {
-	st := u.hotspotSnapshot()
-	enabled := u.hotspotEnabled()
-	for u.btnHotspot.Clicked(gtx) {
-		u.toggleHotspot()
-	}
-	label := "AKTIFKAN"
-	if enabled {
-		label = "MATIKAN"
-	}
-	note := st.summary()
-	if st.Note != "" {
-		note += " (" + st.Note + ")"
-	}
-	hint := "Nyalakan Mobile Hotspot Windows, lalu tekan AKTIFKAN."
-	if st.Active && !st.Shared {
-		hint = "Hotspot siap — tekan AKTIFKAN saat tunnel tersambung."
-	}
-	if st.Shared {
-		hint = "Klien hotspot keluar lewat VPN."
-	}
-
-	return card(gtx, color.NRGBA{R: 22, G: 27, B: 34, A: 255}, color.NRGBA{R: 48, G: 54, B: 61, A: 255}, unit.Dp(6), func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				l := material.Label(th, unit.Sp(12), "HOTSPOT SHARE")
-				l.Font.Weight = font.Bold
-				l.Color = color.NRGBA{R: 240, G: 246, B: 252, A: 255}
-				return l.Layout(gtx)
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				l := material.Label(th, unit.Sp(11), note)
-				if st.Shared {
-					l.Color = color.NRGBA{R: 52, G: 211, B: 153, A: 255}
-				} else {
-					l.Color = color.NRGBA{R: 139, G: 148, B: 158, A: 255}
-				}
-				return l.Layout(gtx)
-			}),
-			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if !st.Supported {
-					return layout.Dimensions{}
-				}
-				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						b := material.Button(th, &u.btnHotspot, label)
-						if enabled {
-							b.Background = color.NRGBA{R: 239, G: 68, B: 68, A: 255}
-						} else {
-							b.Background = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
-						}
-						b.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-						b.TextSize = unit.Sp(11)
-						b.CornerRadius = unit.Dp(4)
-						return b.Layout(gtx)
-					}),
-					layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						l := material.Label(th, unit.Sp(10), hint)
-						l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
-						return l.Layout(gtx)
-					}),
-				)
-			}),
-		)
-	})
-}
-
 func (u *uiState) drawEditScreen(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -723,7 +649,7 @@ func (u *uiState) drawSettingsScreen(gtx layout.Context, th *material.Theme) lay
 			return cb.Layout(gtx)
 		}),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(inputField(th, &u.edInterval, "Interval Detik (default: 3)").Layout),
+		layout.Rigid(inputField(th, &u.edInterval, "Interval Detik (default: 15)").Layout),
 		layout.Rigid(inputField(th, &u.edPingURL, "URL Ping (204 Endpoint)").Layout),
 		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -1008,8 +934,8 @@ func (u *uiState) openSettingsView() {
 
 func (u *uiState) saveSettingsForm() {
 	n, err := strconv.Atoi(strings.TrimSpace(u.edInterval.Text()))
-	if err != nil || n < 1 {
-		u.status = "GAGAL: interval minimal 1 detik."
+	if err != nil || n < minPingInterval {
+		u.status = fmt.Sprintf("GAGAL: interval minimal %d detik.", minPingInterval)
 		return
 	}
 	target := strings.TrimSpace(u.edPingURL.Text())
@@ -1032,6 +958,13 @@ func (u *uiState) connected() bool {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	return u.cmd != nil && u.cmd.Process != nil
+}
+
+// invalidate asks Gio to redraw; safe to call from any goroutine.
+func (u *uiState) invalidate() {
+	if u.win != nil {
+		u.win.Invalidate()
+	}
 }
 
 // statusSnapshot membaca status dan hasil ping untuk UI maupun mode --connect.
@@ -1138,9 +1071,6 @@ func (u *uiState) verifyTunnel(cmd *exec.Cmd) {
 			}
 			u.mu.Unlock()
 			u.invalidate()
-			if u.hotspotEnabled() {
-				u.shareHotspot()
-			}
 			if u.pingLoopEnabled() {
 				u.startPingLoop()
 			}
@@ -1158,7 +1088,6 @@ func (u *uiState) verifyTunnel(cmd *exec.Cmd) {
 	u.invalidate()
 	if dead {
 		u.killCore()
-		u.unshareHotspot()
 	}
 }
 
@@ -1190,6 +1119,7 @@ func (u *uiState) killCore() {
 	u.cmd = nil
 	u.mu.Unlock()
 	u.stopPingLoop()
+	probeClient.CloseIdleConnections()
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Kill()
 	}
@@ -1197,7 +1127,6 @@ func (u *uiState) killCore() {
 
 func (u *uiState) stop() {
 	u.killCore()
-	u.unshareHotspot()
 	u.mu.Lock()
 	u.status = "Disconnected"
 	u.pingMs = "-"
@@ -1262,10 +1191,22 @@ func (u *uiState) execPing() {
 	u.invalidate()
 }
 
+// probeClient dipakai bersama semua probe: keep-alive membuat probe berikutnya
+// memakai koneksi yang sama, bukan handshake TCP+TLS+WS baru tiap kali (dulu
+// setiap probe meninggalkan koneksi baru ke server dan bikin CPU/handle naik).
+var probeClient = &http.Client{
+	Timeout: 6 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConns:        2,
+		MaxIdleConnsPerHost: 2,
+		IdleConnTimeout:     120 * time.Second,
+	},
+}
+
 // probeTunnel checks connectivity through the TUN, without a proxy: with
 // auto_route every packet, including DNS, already travels the tunnel.
 func probeTunnel(target string) (time.Duration, int, error) {
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := probeClient
 	start := time.Now()
 	req, err := http.NewRequest(http.MethodHead, target, nil)
 	if err != nil {
@@ -1300,7 +1241,7 @@ func loadConfig() configData {
 	if err != nil {
 		return configData{
 			HTTPPing:     true,
-			PingInterval: 3,
+			PingInterval: defaultPingInterval,
 			PingURL:      defaultPingURL,
 		}
 	}
@@ -1308,13 +1249,11 @@ func loadConfig() configData {
 	if json.Unmarshal(b, &cfg) != nil {
 		return configData{
 			HTTPPing:     true,
-			PingInterval: 3,
+			PingInterval: defaultPingInterval,
 			PingURL:      defaultPingURL,
 		}
 	}
-	if cfg.PingInterval < 1 {
-		cfg.PingInterval = 3
-	}
+	cfg.PingInterval = normalizePingInterval(cfg.PingInterval)
 	if cfg.PingURL == "" {
 		cfg.PingURL = defaultPingURL
 	}

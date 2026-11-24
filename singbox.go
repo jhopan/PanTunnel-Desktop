@@ -31,10 +31,8 @@ const (
 	tunAddress6      = "fdfe:dcba:9876::1/126"
 )
 
-// LAN destinations stay outside the tunnel. 192.168.0.0/16 covers the Windows
-// Mobile Hotspot subnet (192.168.137.0/24), so the ICS DHCP server and the
-// hotspot gateway address keep working while clients still egress through
-// the VPN via NAT.
+// LAN destinations stay outside the tunnel: perangkat lokal, printer, router,
+// dan apa pun di jaringan rumahl/kantor tetap bisa dijangkau langsung.
 var lanRoutes = []string{
 	"127.0.0.0/8",
 	"10.0.0.0/8",
@@ -277,19 +275,28 @@ func buildSingboxConfig(p profile, port int, modern bool) ([]byte, error) {
 		routeMap["default_domain_resolver"] = map[string]any{"server": "dns-tunnel", "strategy": "prefer_ipv4"}
 	}
 
+	// Log core opsional: PANTUNNEL_CORE_LOG=/path/file.log menyalakan log debug
+	// ke file. Tanpa ini stdout core tidak disimpan, jadi tidak ada bukti untuk
+	// menelusuri kejadian seperti "kenapa putus".
+	logMap := map[string]any{"level": "warn"}
+	if logPath := strings.TrimSpace(os.Getenv("PANTUNNEL_CORE_LOG")); logPath != "" {
+		logMap["level"] = "debug"
+		logMap["output"] = logPath
+	}
+
 	cfg := map[string]any{
-		"log": map[string]any{"level": "warn"},
+		"log": logMap,
 		"dns": dns,
 		"inbounds": []any{
 			map[string]any{
-				"type":                 "tun",
-				"tag":                  "tun-in",
-				"interface_name":       tunInterfaceName,
-				"address":              []string{tunAddress4, tunAddress6},
-				"auto_route":           true,
-				"strict_route":         true,
-				"stack":                "gvisor",
-				"mtu":                  1400,
+				"type":                  "tun",
+				"tag":                   "tun-in",
+				"interface_name":        tunInterfaceName,
+				"address":               []string{tunAddress4, tunAddress6},
+				"auto_route":            true,
+				"strict_route":          true,
+				"stack":                 "gvisor",
+				"mtu":                   1400,
 				"route_exclude_address": excluded,
 			},
 		},

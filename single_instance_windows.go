@@ -7,8 +7,8 @@ import (
 	"unsafe"
 )
 
-// Satu instance saja: dua proses berarti dua adapter TUN, dua set route, dan
-// dua binding ICS yang saling menabrak.
+// Satu instance saja: dua proses berarti dua adapter TUN dan dua set route yang
+// saling menabrak.
 var (
 	kernel32                = syscall.NewLazyDLL("kernel32.dll")
 	procCreateMutexW        = kernel32.NewProc("CreateMutexW")

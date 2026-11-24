@@ -11,7 +11,6 @@ Dokumen ini untuk agent yang menjalankan uji di Mac. Windows sudah terverifikasi
 | Core sing-box (utun) | `scripts/build-core.sh … darwin arm64`; butuh setuid lewat dialog admin (`runOneTimeSetup`) |
 | Mode TUN + VLESS WS TLS | Jalur kode sama dengan Windows, **belum diuji di mesin Mac** |
 | Anti-DNS-leak | **Belum berlaku di macOS** — lihat bagian "Celah DNS" di bawah |
-| Hotspot Share | **Tidak ada implementasi**; Windows-only (`hotspot_other.go` = stub) |
 
 ## Build
 
@@ -89,16 +88,9 @@ Dua cara memperbaiki (pilih satu, lalu uji ulang poin 4):
 
 Perbaikan ini belum diimplementasi. Jangan klaim "tanpa DNS leak" di macOS sebelum poin 4 lulus.
 
-## Hotspot di macOS (belum ada, rencana)
-
-macOS tidak punya padanan ICS COM. Untuk berbagi utun ke klien Wi-Fi, jalurnya `com.apple.nat.plist`
-(`NAT.Enabled=1`, `PrimaryInterface=utunN`, `SharingDevices=[en1]`) + restart service
-`com.apple.NetworkSharing`; UI "Internet Sharing" tidak menampilkan utun sebagai sumber. Itu state root
-yang persisten dan private API — jangan dikerjakan tanpa izin user dan tanpa cara rollback yang jelas.
-
 ## Aturan untuk agent
 
 - Jangan menaikkan utun (`--connect`, tombol CONNECT, `sudo core run`) tanpa izin eksplisit user.
-- Jangan mengubah Internet Sharing/NAT (`com.apple.nat.plist`, `networksharingd`) — belum ada implementasi.
+- Jangan mengubah Internet Sharing/NAT (`com.apple.nat.plist`, `networksharingd`) tanpa izin user.
 - Setelah uji, pastikan core mati, utun hilang, DNS sistem kembali seperti semula.
 - Laporkan hasil apa adanya ke `docs/VERIFICATION.md` beserta perintah dan output aslinya.

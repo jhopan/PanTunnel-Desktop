@@ -10,11 +10,8 @@ remote ke agen ini).
 
 - **MUST NOT** menjalankan core dengan config TUN (`sing-box run -c ...`) tanpa izin eksplisit user
   pada sesi itu.
-- **MUST NOT** mengubah state ICS (`--ics enable`, `--ics disable`) tanpa izin eksplisit: itu
-  mengubah sharing internet laptop.
 - **MUST NOT** menjalankan `--connect`: mode itu menaikkan TUN, sama seperti menekan CONNECT.
-- Aman dijalankan kapan saja: `go test ./...`, `go vet ./...`, `--dump-config` + `sing-box check`,
-  `--ics query` (read-only).
+- Aman dijalankan kapan saja: `go test ./...`, `go vet ./...`, `--dump-config` + `sing-box check`.
 - Kalau tunnel pernah dijalankan saat menguji: pastikan core mati, adapter `pantunnel-tun` hilang, dan
   koneksi user pulih sebelum melapor selesai.
 
@@ -54,8 +51,7 @@ xattr -d com.apple.quarantine bin/PanTunnel-* 2>/dev/null
 - **Belum ada yang terverifikasi di macOS.** Jangan klaim "tanpa DNS leak" di sana sebelum poin 4 di
   `docs/MACOS.md` lulus — sing-box tidak menyetel resolver sistem di macOS, jadi query ke DNS router
   bisa keluar langsung.
-- Hotspot Share tidak ada implementasinya di macOS (stub). Jangan mengubah `com.apple.nat.plist` atau
-  `networksharingd` tanpa izin user.
+- Jangan mengubah Internet Sharing macOS (`com.apple.nat.plist`, `networksharingd`) tanpa izin user.
 
 ## Gerbang verifikasi sebelum lapor "selesai"
 
@@ -63,7 +59,7 @@ xattr -d com.apple.quarantine bin/PanTunnel-* 2>/dev/null
 2. `--dump-config` untuk kedua dialek, lalu `sing-box check` dengan core sungguhan:
    `bin/PanTunnel-Core-windows-amd64.exe` (bangun dengan `./scripts/build-core.sh`) untuk dialek legacy,
    sing-box ≥1.12 untuk dialek modern.
-3. Perubahan UI/ICS: uji hidup hanya dengan izin user (lihat aturan di atas), dan catat apa yang
+3. Perubahan UI: uji hidup hanya dengan izin user (lihat aturan di atas), dan catat apa yang
    belum diuji di `docs/VERIFICATION.md`.
 4. macOS: build + `--dump-config` + `core check` aman; uji utun (`--connect`) hanya dengan izin user,
    lalu isi hasil 6 poin di `docs/MACOS.md` ke `docs/VERIFICATION.md`.
@@ -74,5 +70,4 @@ xattr -d com.apple.quarantine bin/PanTunnel-* 2>/dev/null
   sumber kebocoran.
 - Setiap penambahan konfigurasi anti-leak harus punya test di `singbox_test.go` yang gagal kalau field
   itu hilang.
-- Skrip PowerShell ICS diedit sebagai string Go: jalankan `go test -run TestICSScript` setelah mengubah.
 - Bahasa UI: Indonesia, istilah teknis tidak diterjemahkan.

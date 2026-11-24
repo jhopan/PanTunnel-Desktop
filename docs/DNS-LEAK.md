@@ -73,9 +73,8 @@ adapter fisik. Ini pilihan fail-closed: lebih baik IPv6 mati daripada bocor.
 "route_exclude_address": ["127.0.0.0/8","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","169.254.0.0/16"]
 ```
 
-Trafik ke perangkat lokal, printer, router, dan **klien hotspot** tidak ditarik ke tunnel. Ini wajib:
-subnet hotspot Windows (192.168.137.0/24) harus tetap dijangkau langsung supaya DHCP dan gateway
-hotspot bekerja (lihat `HOTSPOT.md`).
+Trafik ke perangkat lokal, printer, router, dan PC lain di LAN tidak ditarik ke tunnel, jadi jaringan
+rumah tetap bisa dipakai berdampingan dengan VPN.
 
 ## Cara membuktikan (jangan dijalankan tanpa izin user)
 

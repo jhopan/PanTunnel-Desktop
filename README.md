@@ -4,7 +4,7 @@
 
 **VPN ringan desktop berbasis sing-box — VLESS WebSocket TLS**
 
-Turunan desktop dari [JPS Tunnel](https://github.com/jhopan/JPS-Tunnel) · fokus Windows, TUN, tanpa DNS leak, plus Hotspot Share
+Turunan desktop dari [JPS Tunnel](https://github.com/jhopan/JPS-Tunnel) · fokus Windows, TUN, tanpa DNS leak
 
 </div>
 
@@ -24,7 +24,6 @@ Perbedaan utama dari JPS Tunnel Desktop:
 | DNS | Server DNS lewat tunnel | DNS lewat tunnel **+ hijack-dns** + `strict_route` |
 | Kebocoran IPv6 | Route IPv6 tidak dikelola | Alamat IPv6 di TUN, trafik gagal = ditolak (fail-closed) |
 | Subnet TUN | `172.19.0.1/30` | `172.31.19.1/30` (hindari bentrok dengan klien sing-box lain) |
-| Hotspot laptop | — | **Hotspot Share**: klien hotspot ikut lewat VPN |
 | Status | "Connected" saat proses core hidup | "Connected" hanya setelah HTTP 204 nyata lewat TUN |
 | Dialek config core | 1.11.x saja | otomatis: 1.11 (legacy) atau ≥1.12 (modern) |
 | Elevasi | jalankan manual sebagai Administrator | UAC otomatis saat start |
@@ -50,20 +49,6 @@ Perbedaan utama dari JPS Tunnel Desktop:
 - IPv6 di-fail-closed, bukan dibocorkan ke adapter fisik
 
 Detail dan cara mengujinya: [`docs/DNS-LEAK.md`](docs/DNS-LEAK.md).
-
-### Hotspot Share (baru, batas platform)
-- Membagikan adapter TUN lewat Internet Connection Sharing: klien mendapat DHCP + NAT, lalu keluar
-  lewat VPN
-- **Tidak jalan di Windows 11 Mobile Hotspot** — build itu memegang sharing sendiri dan hanya mau
-  sumber adapter fisik; lihat [`docs/HOTSPOT.md`](docs/HOTSPOT.md)
-- Jalan pada jalur ICS legacy: berbagi ke adapter kabel/Ethernet, dan hotspot gaya lama (mis. Windows 10)
-- Tunnel dijadikan koneksi yang dibagikan Windows (ICS public = `pantunnel-tun`), bukan adapter fisik
-- DHCP + NAT tetap dari Windows; klien dapat IP `192.168.137.x`, trafiknya keluar lewat VPN
-- Jumlah klien yang lewat VPN ditampilkan di kartu Hotspot Share
-- Saat disconnect, koneksi yang tadinya berbagi internet dikembalikan seperti semula
-- Watchdog 15 detik: kalau Windows mengembalikan sharing ke adapter fisik, tunnel diambil alih lagi
-
-Detail: [`docs/HOTSPOT.md`](docs/HOTSPOT.md).
 
 ### Profil & Core
 - Multi-profil — import dari clipboard (`vless://`) atau file `.txt`/`.jps`
@@ -149,7 +134,6 @@ Installer Windows (butuh Inno Setup 6):
 # tulis config yang persis dipakai GUI, tanpa menjalankan aplikasi
 PanTunnel-Desktop.exe --dump-config out.json --vless "vless://uuid@host:443?type=ws&security=tls&path=/vless&sni=host&host=host#Nama"
 PanTunnel-Desktop.exe --dump-config out.json --dialect legacy   # paksa dialek 1.11
-PanTunnel-Desktop.exe --ics query                               # status ICS / hotspot (Windows)
 PanTunnel-Desktop.exe --connect 60                              # sambung 60 detik lalu putus (diagnosa; TUN naik!)
 ```
 
@@ -158,7 +142,7 @@ tidak butuh admin.
 
 ## Data aplikasi
 
-`%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`, `ics.ps1`.
+`%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`.
 
 ## macOS
 
@@ -173,8 +157,8 @@ go test ./...
 ```
 
 Mencakup: parser URI VLESS, bentuk config anti-leak (TUN saja, `strict_route`, `hijack-dns`, DNS lewat
-tunnel, LAN di-exclude), perbedaan dialek legacy/modern, parsing versi core, parser laporan ICS, dan
-pemeriksaan sintaks skrip PowerShell ICS memakai parser PowerShell asli.
+tunnel, LAN di-exclude, IP server di-pin + di-exclude dari route), perbedaan dialek legacy/modern,
+parsing versi core, normalisasi interval probe, dan opsi log core.
 
 Hasil verifikasi config terhadap core asli: [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 

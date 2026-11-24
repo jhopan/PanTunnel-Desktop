@@ -176,12 +176,12 @@ jobs:
           body: |
             ## PanTunnel Desktop ${{ github.ref_name }}
 
-            Klien VPN desktop berbasis sing-box (TUN gVisor), VLESS WS TLS, tanpa DNS leak, plus Hotspot Share.
+            Klien VPN desktop berbasis sing-box (TUN gVisor), VLESS WS TLS, tanpa DNS leak.
 
             ### Cara pakai
             1. Unduh `PanTunnel-Desktop-<platform>` dan `PanTunnel-Core-<platform>` yang cocok.
             2. Taruh keduanya di satu folder (rename core apa adanya — aplikasi mencarinya dengan nama itu).
-            3. Jalankan aplikasi; UAC muncul sendiri karena TUN dan ICS butuh admin.
+            3. Jalankan aplikasi; UAC muncul sendiri karena pembuatan TUN butuh admin.
 
             ### Catatan
             - Core sing-box **dibangun dari source** (v1.11.15, tag `with_gvisor,with_clash_api`) — bukan binary pihak lain.

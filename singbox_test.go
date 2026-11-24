@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -85,7 +85,7 @@ func TestConfigLeakProtection(t *testing.T) {
 	excluded := stringsOf(t, tun["route_exclude_address"])
 	for _, want := range []string{"192.168.0.0/16", "10.0.0.0/8", serverHostRoute} {
 		if !contains(excluded, want) {
-			t.Fatalf("route_exclude_address harus memuat %s (LAN + subnet hotspot + server VPN): %v", want, excluded)
+			t.Fatalf("route_exclude_address harus memuat %s (LAN + server VPN): %v", want, excluded)
 		}
 	}
 
@@ -176,8 +176,8 @@ func TestConfigDialects(t *testing.T) {
 // ikut masuk TUN (dan hostname tidak pernah diresolusi di dalam tunnel).
 func TestHostRoute(t *testing.T) {
 	cases := map[string]string{
-		"203.0.113.10": "203.0.113.10/32",
-		"2001:db8::1":  "2001:db8::1/128",
+		"203.0.113.10":   "203.0.113.10/32",
+		"2001:db8::1":    "2001:db8::1/128",
 		"server.example": "",
 		"":               "",
 	}
@@ -223,33 +223,6 @@ func TestParseCoreVersion(t *testing.T) {
 	}
 }
 
-func TestParseHotspotQuery(t *testing.T) {
-	out := "TUN_PRESENT=1\r\nPUBLIC=pantunnel-tun\r\nPUBLIC=Ethernet 2\r\nHOTSPOT_ADAPTER=Local Area Connection* 1\r\nHOTSPOT_UP=1\r\nCLIENTS=3\r\n"
-	st := parseHotspotQuery(out)
-	if !st.Supported || !st.Active || !st.Shared || st.Clients != 3 {
-		t.Fatalf("state salah: %#v", st)
-	}
-	if st.Adapter != "Local Area Connection* 1" {
-		t.Fatalf("adapter hotspot salah: %q", st.Adapter)
-	}
-	if !strings.Contains(st.summary(), "3 klien lewat VPN") {
-		t.Fatal("summary tidak menyebut klien")
-	}
-
-	idle := parseHotspotQuery("TUN_PRESENT=0\nCLIENTS=0\n")
-	if idle.Shared || idle.Active || idle.Note == "" {
-		t.Fatalf("state idle salah: %#v", idle)
-	}
-
-	failed := parseHotspotQuery("ERROR=ICS tidak bisa dipakai\n")
-	if failed.Note != "ICS tidak bisa dipakai" {
-		t.Fatalf("pesan error hilang: %#v", failed)
-	}
-	if strings.Contains(failed.summary(), "klien lewat VPN") {
-		t.Fatalf("summary mengklaim klien lewat VPN saat error: %q", failed.summary())
-	}
-}
-
 func contains(haystack []string, needle string) bool {
 	for _, item := range haystack {
 		if item == needle {
@@ -257,4 +230,56 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func TestNormalizePingInterval(t *testing.T) {
+	cases := map[int]int{
+		0:  defaultPingInterval,
+		1:  defaultPingInterval,
+		4:  defaultPingInterval,
+		5:  5,
+		15: 15,
+		60: 60,
+	}
+	for in, want := range cases {
+		if got := normalizePingInterval(in); got != want {
+			t.Fatalf("normalizePingInterval(%d) = %d, mau %d", in, got, want)
+		}
+	}
+}
+
+// Log core opsional: tanpa env ini stdout core tidak disimpan, jadi tidak ada
+// bukti untuk menelusuri kejadian seperti "kenapa putus".
+func TestConfigCoreLogEnv(t *testing.T) {
+	p, err := parseVLESS(sampleURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Address = "203.0.113.10"
+
+	raw, err := buildSingboxConfig(p, 443, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var quiet map[string]any
+	if err := json.Unmarshal(raw, &quiet); err != nil {
+		t.Fatal(err)
+	}
+	if dict(t, quiet["log"])["level"] != "warn" {
+		t.Fatal("tanpa PANTUNNEL_CORE_LOG, level harus warn")
+	}
+
+	t.Setenv("PANTUNNEL_CORE_LOG", filepath.Join(t.TempDir(), "core.log"))
+	raw, err = buildSingboxConfig(p, 443, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loud map[string]any
+	if err := json.Unmarshal(raw, &loud); err != nil {
+		t.Fatal(err)
+	}
+	logMap := dict(t, loud["log"])
+	if logMap["level"] != "debug" || logMap["output"] == "" {
+		t.Fatalf("PANTUNNEL_CORE_LOG harus menyalakan log debug ke file: %#v", logMap)
+	}
 }

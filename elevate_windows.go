@@ -23,8 +23,8 @@ func elevatedNow() bool {
 }
 
 // ensureElevated relaunches the app through the UAC prompt when it is not an
-// administrator: TUN creation and ICS need admin, and a silent failure there
-// would look like a broken VPN. It reports whether this process should keep
+// administrator: creating the TUN needs admin, and a silent failure there would
+// look like a broken VPN. It reports whether this process should keep
 // running: after a successful relaunch the caller must exit.
 func ensureElevated() bool {
 	if elevatedNow() {

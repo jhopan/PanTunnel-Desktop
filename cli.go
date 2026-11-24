@@ -12,7 +12,6 @@ import (
 //
 //	PanTunnel-Desktop --dump-config <file> [--vless <uri>] [--dialect auto|legacy|modern]
 //	PanTunnel-Desktop --connect <detik>
-//	PanTunnel-Desktop --ics query|enable|disable
 //
 // --dump-config renders the exact sing-box config the GUI would run, so the
 // config can be validated (core check) on a machine without a GUI session.
@@ -26,13 +25,9 @@ func runCLI(args []string) (int, bool) {
 	dump := fs.String("dump-config", "", "tulis config sing-box ke file ini, lalu keluar")
 	uri := fs.String("vless", "", "URI vless:// untuk --dump-config")
 	dialect := fs.String("dialect", "auto", "dialek config: auto|legacy|modern")
-	ics := fs.String("ics", "", "hotspot share (Windows): query|enable|disable")
 	connect := fs.Int("connect", 0, "sambungkan tunnel, tunggu N detik, lalu putus (diagnosa)")
 	if err := fs.Parse(args); err != nil {
 		return 2, true
-	}
-	if *ics != "" {
-		return runICSCommand(*ics), true
 	}
 	if *connect > 0 {
 		return runConnectOnce(*connect), true

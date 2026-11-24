@@ -6,15 +6,12 @@ disebut belum diuji.
 ## 1. Test unit — `go test ./...`
 
 ```
---- PASS: TestICSScriptParses            (parser PowerShell asli memeriksa skrip ICS)
---- PASS: TestICSScriptSharesTunAndRestores
 --- PASS: TestParseVLESSWebSocketTLS
 --- PASS: TestRejectNonWebSocketTLS
 --- PASS: TestParsePort
 --- PASS: TestConfigLeakProtection
 --- PASS: TestConfigDialects
 --- PASS: TestParseCoreVersion
---- PASS: TestParseHotspotQuery
 ok  github.com/jhopan/PanTunnel-Desktop
 ```
 
@@ -60,40 +57,10 @@ PanTunnel-Core-windows-amd64.exe check -c auto-local.json
 → (tanpa output; exit 0)
 ```
 
-## 2b. ICS menerima TUN sebagai koneksi public
-
-Pertanyaan paling berisiko sebelum fitur Hotspot Share diuji: apakah Windows ICS mau membagikan
-adapter TUN yang tidak punya default gateway (hanya route `0.0.0.0/1` + `128.0.0.0/1`)? Diuji di laptop
-ini dengan tunnel hidup:
-
-```
-> bin/PanTunnel-Desktop.exe --ics query      # baseline
-TUN_PRESENT=1
-HOTSPOT_ADAPTER=Local Area Connection* 3
-CLIENTS=0                                     ← belum ada sharing apa pun aktif
-
-> bin/PanTunnel-Desktop.exe --ics enable
-PUBLIC=pantunnel-tun                          ← ICS menerima TUN, tanpa error
-
-> bin/PanTunnel-Desktop.exe --ics disable
-TUN_PRESENT=1                                 ← kembali bersih, tidak ada PUBLIC=
-```
-
-Selama percobaan itu: HTTP 204 lewat tunnel tetap `204`, DNS sistem tetap terjawab, IP adapter TUN tidak
-berubah, adapter Wi-Fi Direct tidak tersentuh. Jadi sisi **public** aman dan reversible.
-
-Sisi **private + klien hotspot** sudah diuji (2026-11-23) dan **gagal** — batas platform, bukan bug:
-
-| Uji | Hasil |
-|---|---|
-| `--ics enable` saat Mobile Hotspot menyala | ditolak `HRESULT 0x80040201` (sharing dipegang tethering stack) |
-| Dropdown "Share my internet connection from" | hanya `Ethernet 2`; TUN tidak pernah muncul (walau `IPv4Connectivity: Internet` + punya default route) |
-| Klien di hotspot | internet jalan, **IP keluar bukan IP VPN** → bypass lewat adapter fisik |
-| `netsh wlan show drivers` | `Hosted network supported: No` → tidak ada jalur SoftAP legacy |
-| Setelah percobaan | seluruh perubahan dibalik: ICS tanpa public, route uji dihapus, hotspot dimatikan, host tetap `204` |
-
-Kesimpulan: di Windows 11 Mobile Hotspot, klien hotspot tidak bisa dipaksa lewat VPN dengan ICS.
-Aplikasi kini melaporkan pesan itu, dan jalur ICS legacy tetap tersedia untuk berbagi ke adapter kabel.
+> Catatan riwayat: fitur **Hotspot Share** (ICS, public = TUN) pernah ada dan **dihapus** pada
+> 2026-11-24 setelah terbukti tidak bisa dipakai di Windows 11 Mobile Hotspot (tethering stack menolak
+> takeover, `HRESULT 0x80040201`; driver Wi-Fi tidak mendukung SoftAP legacy). Ringkasan bukti ada di
+> commit `860a4a3`.
 
 ## 3. Tunnel + DNS — terverifikasi hidup
 
