@@ -12,3 +12,7 @@ func writeClipboard(string) error {
 func chooseImportFile() (string, error) {
 	return "", fmt.Errorf("file picker belum tersedia pada platform ini")
 }
+
+func chooseSaveFile(string) (string, error) {
+	return "", fmt.Errorf("file picker belum tersedia pada platform ini")
+}

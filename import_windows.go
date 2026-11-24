@@ -14,6 +14,7 @@ import (
 var (
 	comdlg32             = syscall.NewLazyDLL("comdlg32.dll")
 	procGetOpenFileNameW = comdlg32.NewProc("GetOpenFileNameW")
+	procGetSaveFileNameW = comdlg32.NewProc("GetSaveFileNameW")
 )
 
 func readClipboard() string {
@@ -61,8 +62,10 @@ type openFileNameW struct {
 }
 
 const (
-	ofnFileMustExist = 0x00001000
-	ofnPathMustExist = 0x00000800
+	ofnFileMustExist   = 0x00001000
+	ofnPathMustExist   = 0x00000800
+	ofnOverwritePrompt = 0x00000002
+	ofnNoChangeDir     = 0x00000008
 )
 
 func chooseImportFile() (string, error) {
@@ -93,6 +96,45 @@ func chooseImportFile() (string, error) {
 		return "", fmt.Errorf("dibatalkan")
 	}
 
+	var length int
+	for length = 0; length < len(fileBuf); length++ {
+		if fileBuf[length] == 0 {
+			break
+		}
+	}
+	return string(utf16.Decode(fileBuf[:length])), nil
+}
+
+// chooseSaveFile menanyakan nama file tujuan (dipakai ekspor lisensi .pantunnel).
+func chooseSaveFile(defaultName string) (string, error) {
+	var filter []uint16
+	for _, part := range []string{"Lisensi PanTunnel (*.pantunnel)", "*.pantunnel", "Semua File (*.*)", "*.*"} {
+		filter = append(filter, utf16.Encode([]rune(part))...)
+		filter = append(filter, 0)
+	}
+	filter = append(filter, 0)
+
+	fileBuf := make([]uint16, 1024)
+	for i, r := range utf16.Encode([]rune(defaultName)) {
+		if i >= len(fileBuf)-1 {
+			break
+		}
+		fileBuf[i] = r
+	}
+
+	var ofn openFileNameW
+	ofn.lStructSize = uint32(unsafe.Sizeof(ofn))
+	ofn.lpstrFilter = &filter[0]
+	ofn.lpstrFile = &fileBuf[0]
+	ofn.nMaxFile = uint32(len(fileBuf))
+	ofn.lpstrTitle = syscall.StringToUTF16Ptr("Simpan Lisensi")
+	ofn.nFilterIndex = 1
+	ofn.flags = ofnOverwritePrompt | ofnPathMustExist | ofnNoChangeDir
+
+	ret, _, _ := procGetSaveFileNameW.Call(uintptr(unsafe.Pointer(&ofn)))
+	if ret == 0 {
+		return "", fmt.Errorf("dibatalkan")
+	}
 	var length int
 	for length = 0; length < len(fileBuf); length++ {
 		if fileBuf[length] == 0 {

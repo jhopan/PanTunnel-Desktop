@@ -1,5 +1,5 @@
 #define AppName "PanTunnel Desktop"
-#define AppVersion "1.1.0"
+#define AppVersion "1.2.0"
 #define AppPublisher "JhopanStore"
 #define AppExeName "PanTunnel-Desktop.exe"
 #define AppCoreName "PanTunnel-Core-windows-amd64.exe"

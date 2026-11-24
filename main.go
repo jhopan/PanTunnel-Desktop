@@ -38,7 +38,7 @@ import (
 const (
 	appName = "PanTunnel"
 	// appVersion di-bump saat rilis; lihat juga setup.iss.
-	appVersion     = "1.1.0"
+	appVersion     = "1.2.0"
 	defaultPingURL = "http://connectivitycheck.gstatic.com/generate_204"
 	// 3 detik = handshake TLS baru tiap 3 detik lewat tunnel. 15 detik sudah
 	// cukup untuk tampilan ping dan jauh lebih hemat CPU/koneksi.
@@ -112,11 +112,13 @@ type uiState struct {
 	btnCancelProfile widget.Clickable
 	btnSaveSettings  widget.Clickable
 	btnCopyHWID      widget.Clickable
+	btnExportLicense widget.Clickable
 
 	selectButtons []widget.Clickable
 	editButtons   []widget.Clickable
 	deleteButtons []widget.Clickable
 	profileList   widget.List
+	settingsList  widget.List
 
 	cbPingEnabled widget.Bool
 
@@ -129,6 +131,9 @@ type uiState struct {
 	edHost     widget.Editor
 	edInterval widget.Editor
 	edPingURL  widget.Editor
+	edLicHWID  widget.Editor
+	edLicName  widget.Editor
+	edLicDate  widget.Editor
 }
 
 func main() {
@@ -226,10 +231,12 @@ func initUI(cfg configData) *uiState {
 		pingMs: "-",
 	}
 	u.profileList.Axis = layout.Vertical
+	u.settingsList.Axis = layout.Vertical
 
 	for _, ed := range []*widget.Editor{
 		&u.edName, &u.edAddress, &u.edPort, &u.edUUID, &u.edPath,
 		&u.edSNI, &u.edHost, &u.edInterval, &u.edPingURL,
+		&u.edLicHWID, &u.edLicName, &u.edLicDate,
 	} {
 		ed.SingleLine = true
 	}
@@ -623,70 +630,105 @@ func (u *uiState) drawEditScreen(gtx layout.Context, th *material.Theme) layout.
 
 func (u *uiState) drawSettingsScreen(gtx layout.Context, th *material.Theme) layout.Dimensions {
 	hwidStr := makeHWID(u.data.InstallationID)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return u.drawSubHeader(gtx, th, "Pengaturan")
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return card(gtx, color.NRGBA{R: 22, G: 27, B: 34, A: 255}, color.NRGBA{R: 48, G: 54, B: 61, A: 255}, unit.Dp(6), func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						l := material.Label(th, unit.Sp(11), "Device HWID")
-						l.Color = color.NRGBA{R: 139, G: 148, B: 158, A: 255}
-						return l.Layout(gtx)
-					}),
-					layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						l := material.Label(th, unit.Sp(13), hwidStr)
-						l.Color = color.NRGBA{R: 0, G: 229, B: 255, A: 255} // Cyan
-						return l.Layout(gtx)
-					}),
-					layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						for u.btnCopyHWID.Clicked(gtx) {
-							u.copyHWID()
-						}
-						b := material.Button(th, &u.btnCopyHWID, "SALIN HWID")
-						b.Background = color.NRGBA{R: 22, G: 27, B: 34, A: 255}
-						b.Color = color.NRGBA{R: 201, G: 209, B: 217, A: 255}
-						b.TextSize = unit.Sp(11)
-						b.CornerRadius = unit.Dp(4)
-						return b.Layout(gtx)
-					}),
-					layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						label := "Kirim HWID ini ke admin untuk mendapat file lisensi .pantunnel."
-						if p := u.getActiveProfile(); p != nil && p.LicenseExpire != "" {
-							label = "Profil aktif: " + licenseSummary(p.LicenseExpire) + "."
-						}
-						l := material.Label(th, unit.Sp(10), label)
-						l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
-						return l.Layout(gtx)
-					}),
-				)
-			})
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			cb := material.CheckBox(th, &u.cbPingEnabled, "HTTP Ping Keep-Alive")
-			cb.Color = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
-			return cb.Layout(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
-		layout.Rigid(inputField(th, &u.edInterval, "Interval Detik (default: 15)").Layout),
-		layout.Rigid(inputField(th, &u.edPingURL, "URL Ping (204 Endpoint)").Layout),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			for u.btnSaveSettings.Clicked(gtx) {
-				u.saveSettingsForm()
-			}
-			b := material.Button(th, &u.btnSaveSettings, "SIMPAN PENGATURAN")
-			b.Background = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
-			b.CornerRadius = unit.Dp(6)
-			return b.Layout(gtx)
-		}),
-	)
+	// Dibungkus List supaya bisa di-scroll: isinya sudah lebih tinggi dari window.
+	return material.List(th, &u.settingsList).Layout(gtx, 1, func(gtx layout.Context, _ int) layout.Dimensions {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return u.drawSubHeader(gtx, th, "Pengaturan")
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return card(gtx, color.NRGBA{R: 22, G: 27, B: 34, A: 255}, color.NRGBA{R: 48, G: 54, B: 61, A: 255}, unit.Dp(6), func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							l := material.Label(th, unit.Sp(11), "Device HWID")
+							l.Color = color.NRGBA{R: 139, G: 148, B: 158, A: 255}
+							return l.Layout(gtx)
+						}),
+						layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							l := material.Label(th, unit.Sp(13), hwidStr)
+							l.Color = color.NRGBA{R: 0, G: 229, B: 255, A: 255} // Cyan
+							return l.Layout(gtx)
+						}),
+						layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							for u.btnCopyHWID.Clicked(gtx) {
+								u.copyHWID()
+							}
+							b := material.Button(th, &u.btnCopyHWID, "SALIN HWID")
+							b.Background = color.NRGBA{R: 22, G: 27, B: 34, A: 255}
+							b.Color = color.NRGBA{R: 201, G: 209, B: 217, A: 255}
+							b.TextSize = unit.Sp(11)
+							b.CornerRadius = unit.Dp(4)
+							return b.Layout(gtx)
+						}),
+						layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							label := "Kirim HWID ini ke admin untuk mendapat file lisensi .pantunnel."
+							if p := u.getActiveProfile(); p != nil && p.LicenseExpire != "" {
+								label = "Profil aktif: " + licenseSummary(p.LicenseExpire) + "."
+							}
+							l := material.Label(th, unit.Sp(10), label)
+							l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
+							return l.Layout(gtx)
+						}),
+					)
+				})
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return divider(gtx, color.NRGBA{R: 33, G: 38, B: 45, A: 255})
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(12)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				l := material.Label(th, unit.Sp(12), "LISENSI TERKUNCI (.pantunnel)")
+				l.Font.Weight = font.Bold
+				l.Color = color.NRGBA{R: 240, G: 246, B: 252, A: 255}
+				return l.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(4)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				l := material.Label(th, unit.Sp(10), "Isi HWID pembeli. File hasil ekspor hanya bisa dibuka di device dengan HWID itu; profil yang diekspor = profil aktif.")
+				l.Color = color.NRGBA{R: 110, G: 118, B: 129, A: 255}
+				return l.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
+			layout.Rigid(labeledField(gtx, th, "HWID Pembeli", "24 karakter, dari tombol SALIN HWID di device mereka", inputField(th, &u.edLicHWID, "mis. 453A6791CD2ED2731FF6E5E5")).Layout),
+			layout.Rigid(labeledField(gtx, th, "Nama di Lisensi", "kosong = pakai nama profil", inputField(th, &u.edLicName, "mis. Pelanggan A")).Layout),
+			layout.Rigid(labeledField(gtx, th, "Kedaluwarsa", "YYYY-MM-DD, kosong = tanpa batas", inputField(th, &u.edLicDate, "2027-12-31")).Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				for u.btnExportLicense.Clicked(gtx) {
+					u.exportLicense()
+				}
+				b := material.Button(th, &u.btnExportLicense, "EKSPOR LISENSI")
+				b.Background = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
+				b.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+				b.TextSize = unit.Sp(12)
+				b.CornerRadius = unit.Dp(6)
+				return b.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(16)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				cb := material.CheckBox(th, &u.cbPingEnabled, "HTTP Ping Keep-Alive")
+				cb.Color = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
+				return cb.Layout(gtx)
+			}),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(8)}.Layout),
+			layout.Rigid(inputField(th, &u.edInterval, "Interval Detik (default: 15)").Layout),
+			layout.Rigid(inputField(th, &u.edPingURL, "URL Ping (204 Endpoint)").Layout),
+			layout.Rigid(layout.Spacer{Height: unit.Dp(14)}.Layout),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				for u.btnSaveSettings.Clicked(gtx) {
+					u.saveSettingsForm()
+				}
+				b := material.Button(th, &u.btnSaveSettings, "SIMPAN PENGATURAN")
+				b.Background = color.NRGBA{R: 16, G: 185, B: 129, A: 255}
+				b.CornerRadius = unit.Dp(6)
+				return b.Layout(gtx)
+			}),
+		)
+	})
 }
 
 func (u *uiState) drawSubHeader(gtx layout.Context, th *material.Theme, title string) layout.Dimensions {
@@ -989,6 +1031,76 @@ func (u *uiState) importLicense(text string) {
 	u.screen = screenMain
 	u.status = fmt.Sprintf("Lisensi OK: profil %s ditambahkan (%s).", p.Name, licenseSummary(p.LicenseExpire))
 	u.invalidate()
+}
+
+// exportLicense menulis lisensi .pantunnel untuk HWID pembeli, memakai profil
+// yang sedang aktif. Ini sisi penjual: GUI tidak pernah mengekspor untuk
+// dirinya sendiri, HWID penerima harus diisi manual.
+func (u *uiState) exportLicense() {
+	hwid := u.edLicHWID.Text()
+	name := strings.TrimSpace(u.edLicName.Text())
+	expire := strings.TrimSpace(u.edLicDate.Text())
+
+	raw, err := u.buildLicense(hwid, name, expire)
+	if err != nil {
+		u.status = "GAGAL: " + err.Error()
+		u.invalidate()
+		return
+	}
+	defaultName := u.fileNameForLicense(name)
+	path, err := chooseSaveFile(defaultName)
+	if err != nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	if err := os.WriteFile(path, raw, 0644); err != nil {
+		u.status = "GAGAL: lisensi tidak bisa ditulis — " + err.Error()
+		u.invalidate()
+		return
+	}
+	u.status = fmt.Sprintf("Lisensi ditulis: %s · HWID %s · %s", filepath.Base(path), normalizeHWID(hwid), licenseSummary(expire))
+	u.invalidate()
+}
+
+// buildLicense menyusun isi file lisensi dari profil aktif (tanpa menulis file).
+func (u *uiState) buildLicense(hwid, name, expire string) ([]byte, error) {
+	if len(normalizeHWID(hwid)) != hwidLength {
+		return nil, fmt.Errorf("HWID penerima harus %d karakter (lihat tombol SALIN HWID di device pembeli)", hwidLength)
+	}
+	p := u.getActiveProfile()
+	if p == nil || p.Address == "" || p.UUID == "" {
+		return nil, fmt.Errorf("profil aktif belum lengkap")
+	}
+	if name == "" {
+		name = p.Name
+	}
+	return createLicense(hwid, profileURI(*p), name, expire)
+}
+
+// fileNameForLicense membuat nama file default: huruf/angka/dash saja.
+func (u *uiState) fileNameForLicense(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		if p := u.getActiveProfile(); p != nil {
+			name = p.Name
+		}
+	}
+	if name == "" {
+		name = "profil"
+	}
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '-' || r == '_':
+			b.WriteRune('-')
+		}
+	}
+	clean := strings.Trim(b.String(), "-")
+	if clean == "" {
+		clean = "profil"
+	}
+	return clean + ".pantunnel"
 }
 
 // copyHWID menaruh HWID di clipboard supaya bisa dikirim ke admin.

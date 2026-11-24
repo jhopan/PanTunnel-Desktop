@@ -141,6 +141,7 @@ PanTunnel-Desktop.exe --dump-config out.json --vless "vless://uuid@host:443?type
 PanTunnel-Desktop.exe --dump-config out.json --dialect legacy   # paksa dialek 1.11
 PanTunnel-Desktop.exe --license-create out.pantunnel --hwid <HWID> --vless <uri> --name "Pelanggan" --expire 2027-12-31
 PanTunnel-Desktop.exe --license-info out.pantunnel              # periksa lisensi (read-only)
+#   (ekuivalen GUI: Pengaturan → LISENSI TERKUNCI → EKSPOR LISENSI)
 PanTunnel-Desktop.exe --connect 60                              # sambung 60 detik lalu putus (diagnosa; TUN naik!)
 ```
 
@@ -156,8 +157,15 @@ Env yang berguna: `PANTUNNEL_CORE` (paksa path core), `PANTUNNEL_CORE_LOG` (log 
 `%AppData%\PanTunnel\` — `settings.json`, `config.json` (generated), `cache.db`.
 
 **Device HWID** (layar Pengaturan, tombol **SALIN HWID**) dipakai untuk **lisensi offline**: pelanggan
-mengirim HWID-nya, admin membuat file `.pantunnel` dengan `--license-create`, dan pelanggan mengimpor
-file itu lewat tombol **File**. File hanya bisa dibuka perangkat dengan HWID yang cocok dan bisa diberi
+mengirim HWID-nya, penjual membuat file `.pantunnel`, dan pelanggan mengimpor file itu lewat tombol
+**File**.
+
+Membuat file lisensi bisa dua cara:
+
+- **Di aplikasi**: Pengaturan → bagian **LISENSI TERKUNCI** → isi HWID pembeli, nama, tanggal
+  kedaluwarsa → **EKSPOR LISENSI** (menyimpan `.pantunnel` untuk profil yang sedang aktif)
+- **CLI** (untuk batch/skrip): `--license-create out.pantunnel --hwid <HWID> --vless <uri> [--name …] [--expire …]`,
+  cek dengan `--license-info` File hanya bisa dibuka perangkat dengan HWID yang cocok dan bisa diberi
 tanggal kedaluwarsa; CONNECT ditolak kalau lisensi profil itu sudah lewat.
 
 Format, perintah admin, dan **batas keamanannya** (ini obfuscation, bukan DRM kriptografis — kunci

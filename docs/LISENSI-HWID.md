@@ -6,20 +6,28 @@ opsional dengan tanggal kedaluwarsa. Ini jalan supaya HWID di layar Pengaturan b
 ## Alur
 
 ```
-pelanggan                          admin
-─────────                          ─────
-buka Pengaturan → SALIN HWID  ──▶  PanTunnel-Desktop.exe --license-create \
-                                     uji.pantunnel --hwid <HWID> \
-                                     --vless "vless://…" --name "Pelanggan" --expire 2027-12-31
-terima file .pantunnel  ◀────────  kirim file (WhatsApp/Telegram/email)
-tombol File → pilih .pantunnel  →  profil masuk daftar, lisensi tercatat
+pelanggan (device sendiri)          penjual (app desktop yang sama)
+──────────────────────────          ───────────────────────────────
+Pengaturan → SALIN HWID   ─────▶    Pengaturan → LISENSI TERKUNCI:
+                                      HWID Pembeli: <HWID pelanggan>
+                                      Nama:        Pelanggan A
+                                      Kedaluwarsa: 2027-12-31
+                                      [EKSPOR LISENSI] → simpan .pantunnel
+terima file  ◀────────────────────  kirim file (WhatsApp/Telegram/email)
+tombol File → pilih .pantunnel  →   profil masuk daftar, lisensi tercatat
 ```
 
-Di GUI **tidak ada tombol export** — file lisensi hanya dibuat oleh tooling admin di terminal
-(`--license-create`). Di sisi pelanggan hanya ada import (tombol **File**, atau **Clipboard** kalau isi
-filenya ditempel).
+Dua cara membuat file lisensi (isi filenya identik):
 
-## Perintah admin
+| Cara | Cocok untuk |
+|---|---|
+| GUI: Pengaturan → **LISENSI TERKUNCI** → EKSPOR LISENSI | penjualan satuan; profil yang diekspor = **profil aktif** |
+| CLI: `--license-create … --vless …` | batch/skrip; bisa memilih URI mana pun tanpa mengubah daftar profil |
+
+Di sisi pelanggan hanya ada import (tombol **File**, atau **Clipboard** kalau isi filenya ditempel) —
+tidak ada tombol untuk "mengekspor profil sendiri", karena kunci selalu milik HWID penerima.
+
+## Perintah CLI admin
 
 ```bash
 # buat lisensi untuk satu pelanggan (HWID dari layar Pengaturan mereka)

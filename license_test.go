@@ -174,6 +174,87 @@ func TestImportLicenseAddsProfile(t *testing.T) {
 	}
 }
 
+// Jalur export: profil aktif → URI → lisensi terkunci untuk HWID pembeli.
+func TestBuildLicenseFromActiveProfile(t *testing.T) {
+	t.Setenv("PANTUNNEL_DATA_DIR", t.TempDir())
+	p, err := parseVLESS(licenseURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Name = "Server Pan"
+	u := &uiState{data: configData{Profiles: []profile{p}, ActiveID: p.ID}}
+
+	// HWID harus 24 karakter.
+	if _, err := u.buildLicense("ABC", "", ""); err == nil {
+		t.Fatal("HWID pendek harus ditolak")
+	}
+	// Tanpa profil aktif yang lengkap.
+	empty := &uiState{}
+	if _, err := empty.buildLicense("453A6791CD2ED2731FF6E5E5", "", ""); err == nil {
+		t.Fatal("tanpa profil lengkap harus ditolak")
+	}
+
+	raw, err := u.buildLicense(" 453a-6791-CD2E-D2731FF6E5E5 ", "", "2028-01-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Dibuka oleh HWID pembeli (bentuk apa pun) → berhasil, nama dari profil.
+	buyer, err := openLicense(raw, "453A6791CD2ED2731FF6E5E5", time.Now())
+	if err != nil {
+		t.Fatalf("lisensi hasil export harus bisa dibuka pembeli: %v", err)
+	}
+	if buyer.Name != "Server Pan" || buyer.Address != "lic.example" || buyer.UUID != p.UUID {
+		t.Fatalf("profil di lisensi tidak sama: %#v", buyer)
+	}
+	if buyer.LicenseExpire != "2028-01-31" {
+		t.Fatalf("kedaluwarsa export salah: %q", buyer.LicenseExpire)
+	}
+	// HWID lain tetap ditolak.
+	if _, err := openLicense(raw, "FFFFFFFFFFFFFFFFFFFFFFFF", time.Now()); err == nil {
+		t.Fatal("HWID lain tidak boleh membuka hasil export")
+	}
+}
+
+func TestProfileURIRoundTrip(t *testing.T) {
+	original, err := parseVLESS(sampleURI)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := parseVLESS(profileURI(original))
+	if err != nil {
+		t.Fatalf("URI hasil susun ulang harus valid: %v", err)
+	}
+	if again.Address != original.Address || again.Port != original.Port || again.UUID != original.UUID ||
+		again.Path != original.Path || again.SNI != original.SNI || again.Host != original.Host {
+		t.Fatalf("round-trip berubah:\nawal: %#v\nulang: %#v", original, again)
+	}
+
+	v6 := original
+	v6.Address = "2001:db8::1"
+	v6.Port = "8443"
+	parsed6, err := parseVLESS(profileURI(v6))
+	if err != nil {
+		t.Fatalf("IPv6 harus bisa disusun ulang: %v", err)
+	}
+	if parsed6.Address != "2001:db8::1" || parsed6.Port != "8443" {
+		t.Fatalf("IPv6 berubah: %#v", parsed6)
+	}
+}
+
+func TestFileNameForLicense(t *testing.T) {
+	u := &uiState{data: configData{Profiles: []profile{{Name: "Pelanggan A/B:*?"}}, ActiveID: "x"}}
+	got := u.fileNameForLicense("")
+	if got != "Pelanggan-AB.pantunnel" {
+		t.Fatalf("nama file harus dibersihkan: %q", got)
+	}
+	if name := u.fileNameForLicense("  "); name != "Pelanggan-AB.pantunnel" {
+		t.Fatalf("nama kosong harus jatuh ke nama profil: %q", name)
+	}
+	if name := (&uiState{}).fileNameForLicense(""); name != "profil.pantunnel" {
+		t.Fatalf("tanpa profil apa pun harus 'profil.pantunnel': %q", name)
+	}
+}
+
 // File terkunci dari aplikasi Android memakai format lain (PNT1:…) dan tidak
 // boleh menambah profil; pesannya harus jelas, bukan "tidak ada URI".
 func TestImportRejectsAndroidLockedFile(t *testing.T) {

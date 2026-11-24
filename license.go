@@ -8,6 +8,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -58,6 +60,21 @@ func normalizeHWID(hwid string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// hwidLength sama dengan aplikasi Android: 24 karakter hex huruf besar.
+const hwidLength = 24
+
+// profileURI menyusun kembali URI vless:// dari field profil (kebalikan parseVLESS),
+// supaya lisensi bisa dibuat dari profil yang sudah ada di daftar.
+func profileURI(p profile) string {
+	q := url.Values{}
+	q.Set("type", "ws")
+	q.Set("security", "tls")
+	q.Set("path", p.Path)
+	q.Set("sni", p.SNI)
+	q.Set("host", p.Host)
+	return "vless://" + p.UUID + "@" + net.JoinHostPort(p.Address, p.Port) + "?" + q.Encode() + "#" + url.PathEscape(p.Name)
 }
 
 // licenseKey menurunkan kunci AES-256 dari HWID.
